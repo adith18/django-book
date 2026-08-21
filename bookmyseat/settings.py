@@ -13,26 +13,26 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 import dj_database_url
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+# Quick-start development settings - unsuitable for production
+# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
+
 # SECURITY WARNING: keep the secret key used in production secret!
-# Set the real value as a SECRET_KEY env var in Vercel's dashboard.
-# This fallback is only for local dev and should never be used in production.
-SECRET_KEY = os.environ.get(
-    'SECRET_KEY',
-    'django-insecure-CHANGE-ME-local-dev-only'
-)
+SECRET_KEY = 'django-insecure-w*40o&34h7x@l@%wnqh-t+1#e07!7p%o9va0x(o2hci5vk7qx_'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# Set DEBUG=True as an env var locally if you want debug mode; defaults to False.
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+DEBUG = True
 
-ALLOWED_HOSTS = ['.vercel.app', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['django-book-3amq-3coa4wbi4-adithkrisha-aj.vercel.app']
 
-CSRF_TRUSTED_ORIGINS = ['https://*.vercel.app']
 
 # Application definition
 
@@ -49,7 +49,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -86,10 +85,6 @@ WSGI_APPLICATION = 'bookmyseat.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-#
-# DATABASE_URL is set as an env var in Vercel (and locally in a .env file,
-# not committed to git). Falls back to local sqlite if not set, so you can
-# still run manage.py commands without a Postgres connection handy.
 
 DATABASES = {
     'default': dj_database_url.config(
@@ -97,7 +92,6 @@ DATABASES = {
         conn_max_age=600,
     )
 }
-
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
@@ -137,20 +131,3 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
-
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-
-STORAGES = {
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
-
-# Security hardening — only enforced when DEBUG is off, so local dev over
-# http:// still works.
-if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
