@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-w*40o&34h7x@l@%wnqh-t+1#e07!7p%o9va0x(o2hci5vk7qx_
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['.vercel_app']
 
 
 # Application definition
@@ -88,7 +88,7 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-DATABASES['default']=dj_database_url.parse('postgresql://django_booking_m8cq_user:tUPtEHz7nQsR7B133y42rk8851TQC0Mj@dpg-da3r0vfqj5pc73al1u8g-a.oregon-postgres.render.com/django_booking_m8cq')
+DATABASES['default'] = dj_database_url.parse('postgresql://django_booking_m8cq_user:tUPtEHz7nQsR7B133y42rk8851TQC0Mj@dpg-da3r0vfqj5pc73al1u8g-a.oregon-postgres.render.com/django_booking_m8cq')
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
