@@ -1,0 +1,18 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Database
+db.sqlite3
+
+# Static files (collected)
+staticfiles/
+
+# Media uploads
+media/
+
+# VS Code
+.vscode/
