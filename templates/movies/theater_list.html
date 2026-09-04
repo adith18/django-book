@@ -12,7 +12,7 @@
 
 .container {
   padding: 20px;
-  max-width: 900px;
+  max-width: 1100px;
   margin: 0 auto;
 }
 
@@ -21,6 +21,163 @@
   font-weight: bold;
   text-align: center;
   margin-bottom: 20px;
+}
+
+/* Movie Hero Styling */
+.movie-hero {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.movie-hero .poster {
+  width: 220px;
+}
+
+.movie-hero .poster img.main-poster {
+  width: 220px;
+  height: 310px;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.poster-thumbs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-top: 8px;
+}
+
+.poster-thumbs img {
+  width: 48px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.poster-thumbs img:hover {
+  transform: scale(1.1);
+}
+
+.movie-hero .details {
+  flex: 1;
+  min-width: 240px;
+}
+
+.trailer-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  padding-bottom: 36%;
+  height: 0;
+  margin: 15px 0;
+}
+
+.trailer-wrapper iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  border: none;
+}
+
+.cast-scroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 10px 0;
+}
+
+.cast-card {
+  flex: 0 0 auto;
+  width: 90px;
+  text-align: center;
+}
+
+.cast-card img {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #eee;
+}
+
+.cast-card .name {
+  font-size: 12px;
+  font-weight: bold;
+  margin-top: 5px;
+}
+
+.cast-card .role {
+  font-size: 11px;
+  color: #777;
+}
+
+.verified-badge {
+  font-size: 11px;
+  background: #198754;
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 12px;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.recommend-row {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 10px 0 20px;
+}
+
+.recommend-card {
+  flex: 0 0 auto;
+  width: 150px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s;
+}
+
+.recommend-card:hover {
+  transform: translateY(-4px);
+  text-decoration: none;
+}
+
+.recommend-card img {
+  width: 150px;
+  height: 210px;
+  object-fit: cover;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.recommend-card .title {
+  font-size: 13px;
+  font-weight: bold;
+  margin-top: 5px;
+  color: #333;
+}
+
+/* Star Rating Selector */
+.star-rating-select {
+  display: inline-flex;
+  gap: 4px;
+  font-size: 24px;
+  color: #ffc107;
+  cursor: pointer;
 }
 
 /* Theatre Info Styling */
@@ -33,7 +190,7 @@
   border-radius: 8px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   margin-bottom: 15px;
-  flex-wrap: wrap; /* Responsive wrapping */
+  flex-wrap: wrap;
 }
 
 .theatre-info strong {
@@ -41,13 +198,12 @@
   flex: 1;
 }
 
-/* Info Icons Styling */
 .info-icons {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px; /* Space between icons */
+  gap: 10px;
   margin-top: 10px;
   flex: 2;
 }
@@ -57,17 +213,11 @@
   font-size: 18px;
 }
 
-.info-section {
-  flex: 1;
-  text-align: right;
-}
-
-/* Show Times Styling */
 .show-times {
   display: flex;
   justify-content: space-between;
   padding: 10px 0;
-  flex-wrap: wrap; /* Responsive wrapping */
+  flex-wrap: wrap;
 }
 
 .time-box {
@@ -97,7 +247,6 @@
   color: white;
 }
 
-/* Non-Cancellable Styling */
 .non-cancellable {
   color: #ffc107;
   font-size: 12px;
@@ -110,80 +259,290 @@
   margin-right: 5px;
 }
 
-/* Responsive Styling */
+.review-item {
+  position: relative;
+  background: #fff;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
 @media (max-width: 768px) {
   .theatre-info {
     flex-direction: column;
     align-items: flex-start;
   }
-
-  .info-section {
-    text-align: left;
-    margin-top: 10px;
-  }
-
-  .show-times {
-    justify-content: space-between;
-  }
-
-  .time-box {
-    flex: 1 1 100%;
-    margin-bottom: 10px;
-  }
 }
-  </style>
-  
-  <body>
-    <div class="container">
-      <!-- Movie Title -->
-      <div class="movie-title">Movie - {{ movie.name }}</div>
-  
-      <!-- Conditional Check for Theaters -->
-      {% if theaters %}
-        <!-- Theater List and Showtimes -->
-        {% for theater in theaters %}
-        <div class="theatre-info">
-          <div>
-            <strong>{{ theater.name }} Theater</strong>
-            <div class="info-icons mt-2">
-              <i class="fas fa-mobile-alt text-success"></i> M-Ticket
-              <i class="fas fa-utensils text-warning ms-3"></i> Food & Beverage
-              <i class="fas fa-parking text-primary ms-3"></i> Parking Available
-              <i class="fas fa-wheelchair text-info ms-3"></i> Wheelchair Access
-              <i class="fas fa-glasses text-danger ms-3"></i> 3D Show Available
+</style>
+
+<body>
+  <div class="container">
+    <!-- Movie Hero -->
+    <div class="movie-hero">
+      <div class="poster">
+        <img src="{{ movie.image.url }}" alt="{{ movie.name }}" class="main-poster" id="heroMainPoster">
+        
+        {% if movie.posters.all %}
+        <div class="mt-2">
+          <small class="text-muted font-weight-bold d-block mb-1">Posters Gallery ({{ movie.posters.count }} extra)</small>
+          <div class="poster-thumbs">
+            <img src="{{ movie.image.url }}" alt="Main Poster" onclick="document.getElementById('heroMainPoster').src='{{ movie.image.url }}'">
+            {% for p in movie.posters.all %}
+            <img src="{{ p.image.url }}" alt="Poster" onclick="document.getElementById('heroMainPoster').src='{{ p.image.url }}'" title="{{ p.caption|default:movie.name }}">
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="details">
+        <h1 class="mb-1">{{ movie.name }}</h1>
+        <div class="mb-2">
+          {% if movie.age_certification %}<span class="badge badge-secondary me-1">{{ movie.age_certification }}</span>{% endif %}
+          {% if movie.language %}<span class="badge badge-info me-1">{{ movie.language.name }}</span>{% endif %}
+          {% if movie.duration_display %}<span class="badge badge-light border me-1">{{ movie.duration_display }}</span>{% endif %}
+          {% if movie.release_date %}<span class="badge badge-light border">{{ movie.release_date|date:"M d, Y" }}</span>{% endif %}
+        </div>
+        <div class="mb-2">
+          {% for genre in movie.genres.all %}<span class="badge badge-primary me-1">{{ genre.name }}</span>{% endfor %}
+        </div>
+        <p class="h5 text-warning my-2">
+          <i class="fas fa-star"></i>
+          {% if avg_rating %}
+          <strong>{{ avg_rating|floatformat:1 }}</strong> / 5 
+          <small class="text-muted">({{ movie.review_count }} review{{ movie.review_count|pluralize }})</small>
+          {% else %}
+          <small class="text-muted">No reviews yet</small>
+          {% endif %}
+        </p>
+
+        {% if movie.description %}<p class="text-secondary">{{ movie.description }}</p>{% endif %}
+
+        {% if movie.trailer_embed_url %}
+        <div class="trailer-wrapper">
+          <iframe src="{{ movie.trailer_embed_url }}" title="{{ movie.name }} trailer" allow="encrypted-media; autoplay" sandbox="allow-scripts allow-same-origin allow-presentation" allowfullscreen></iframe>
+        </div>
+        {% endif %}
+
+        {% with cast=movie.ordered_cast %}
+        {% if cast %}
+        <h6 class="mt-3 font-weight-bold">Cast & Crew</h6>
+        <div class="cast-scroll">
+          {% for credit in cast %}
+          <div class="cast-card">
+            {% if credit.cast_member.photo %}
+            <img src="{{ credit.cast_member.photo.url }}" alt="{{ credit.cast_member.name }}">
+            {% else %}
+            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center mx-auto mb-1" style="width:70px; height:70px;">
+              <i class="fas fa-user text-secondary"></i>
             </div>
+            {% endif %}
+            <div class="name">{{ credit.cast_member.name }}</div>
+            {% if credit.character_name %}<div class="role">as {{ credit.character_name }}</div>{% endif %}
           </div>
+          {% endfor %}
         </div>
-  
-        <div class="show-times">
-          <div class="time-box">
-            {{ theater.time }}
-            <a href="{% url 'book_seats' theater.id %}">
-              <span>Book Now</span>
-            </a>
-          </div>
-        </div>
-        {% endfor %}
-      {% else %}
-        <!-- Message when no theaters are available -->
-        <div class="no-theaters mt-4">
-          <p>Sorry, no theaters are available for this movie at the moment.</p>
-        </div>
-      {% endif %}
-  
-      <div class="non-cancellable mt-4">
-        <i class="fas fa-circle text-warning"></i> Non-cancellable
+        {% endif %}
+        {% endwith %}
       </div>
     </div>
-  </body>
-  
-<!-- <h1>Theater for {{movie.name}}</h1>
-<ul>
-  {% for theater in theaters %}
-  <li>
-    <strong>{{theater.name}}</strong>{{theater.time}}
-    <a href="{% url 'book_seats' theater.id %}">View Seats</a>
-  </li>
-  {% endfor %}
-</ul> -->
-{% endblock %}
+
+    <!-- Theaters & Showtimes Section -->
+    <h4 class="mb-3"><i class="fas fa-ticket-alt text-success me-2"></i> Showtimes & Tickets</h4>
+    {% if theaters %}
+      {% for theater in theaters %}
+      <div class="theatre-info">
+        <div>
+          <strong>{{ theater.name }}</strong>
+          <div class="text-muted small"><i class="far fa-calendar-alt me-1"></i> {{ theater.date|date:"D, M d Y" }}</div>
+          <div class="info-icons mt-2">
+            <span class="text-success"><i class="fas fa-mobile-alt"></i> M-Ticket</span>
+            <span class="text-warning ms-3"><i class="fas fa-utensils"></i> Food & Beverage</span>
+            <span class="text-primary ms-3"><i class="fas fa-parking"></i> Parking</span>
+            <span class="text-info ms-3"><i class="fas fa-wheelchair"></i> Accessibility</span>
+          </div>
+        </div>
+        <div class="show-times">
+          <div class="time-box">
+            <strong>{{ theater.time }}</strong>
+            {% if theater.has_started %}
+            <span class="d-block text-muted small mt-1"><i class="fas fa-clock"></i> Show Started</span>
+            {% else %}
+            <a href="{% url 'book_seats' theater.id %}" class="btn btn-sm btn-success text-white mt-1 d-block">
+              Book Now
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="alert alert-light text-center py-4 border">
+        <p class="mb-0 text-muted"><i class="fas fa-info-circle me-1"></i> No active show schedules found for this movie.</p>
+      </div>
+    {% endif %}
+
+    <div class="non-cancellable mb-4">
+      <i class="fas fa-circle text-warning"></i> Tickets once booked are non-cancellable unless stated otherwise.
+    </div>
+
+    <!-- Ratings & Reviews Section -->
+    <div class="reviews-section mt-5 bg-white p-4 rounded shadow-sm">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="mb-0">
+          Viewer Reviews
+          {% if avg_rating %}
+          <span class="text-warning h4 mb-0 ml-2">
+            <i class="fas fa-star"></i> {{ avg_rating|floatformat:1 }}/5
+          </span>
+          {% endif %}
+        </h3>
+      </div>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} alert-dismissible fade show">
+            {{ message }}
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <!-- Review Form -->
+      {% if user.is_authenticated %}
+        {% if can_review %}
+        <div class="card bg-light border-0 mb-4">
+          <div class="card-body">
+            <h5 class="card-title mb-2">
+              {% if user_review %}
+              <i class="fas fa-edit me-1 text-primary"></i> Edit Your Review
+              {% else %}
+              <i class="fas fa-pen me-1 text-success"></i> Write a Review
+              {% endif %}
+            </h5>
+            <form method="POST" class="review-form">
+              {% csrf_token %}
+              <div class="form-group mb-2">
+                <label for="rating" class="font-weight-bold">Select Rating (1 - 5 stars):</label>
+                <select name="rating" id="rating" class="form-control" style="max-width: 150px;" required>
+                  <option value="5" {% if user_review and user_review.rating == 5 %}selected{% endif %}>5 ★★★★★ (Awesome)</option>
+                  <option value="4" {% if user_review and user_review.rating == 4 %}selected{% endif %}>4 ★★★★☆ (Good)</option>
+                  <option value="3" {% if user_review and user_review.rating == 3 %}selected{% endif %}>3 ★★★☆☆ (Average)</option>
+                  <option value="2" {% if user_review and user_review.rating == 2 %}selected{% endif %}>2 ★★☆☆☆ (Poor)</option>
+                  <option value="1" {% if user_review and user_review.rating == 1 %}selected{% endif %}>1 ★☆☆☆☆ (Terrible)</option>
+                </select>
+              </div>
+              <div class="form-group mb-2">
+                <textarea name="comment" class="form-control" rows="3" placeholder="Share your experience watching {{ movie.name }}...">{% if user_review %}{{ user_review.comment }}{% endif %}</textarea>
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm">
+                {% if user_review %}<i class="fas fa-save me-1"></i> Update Review{% else %}<i class="fas fa-paper-plane me-1"></i> Submit Review{% endif %}
+              </button>
+            </form>
+          </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info py-2">
+          <i class="fas fa-lock me-1"></i>
+          <strong>Verified Reviews Only:</strong> You can submit a rating and review after you have booked seats and watched this movie.
+        </div>
+        {% endif %}
+      {% else %}
+      <div class="alert alert-secondary py-2">
+        <a href="{% url 'login' %}" class="font-weight-bold">Log in</a> to submit a review.
+      </div>
+      {% endif %}
+
+      <!-- Existing Reviews List -->
+      {% for review in reviews %}
+      <div class="review-item">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div>
+            <strong>{{ review.user.username }}</strong>
+            {% if review.is_verified_viewer %}
+            <span class="verified-badge" title="Booked & watched movie screening">
+              <i class="fas fa-check-circle"></i> Verified Viewer
+            </span>
+            {% endif %}
+          </div>
+          <div>
+            <span class="text-warning font-weight-bold">{{ review.rating }}/5 <i class="fas fa-star"></i></span>
+          </div>
+        </div>
+        
+        <div class="text-muted small mb-2">
+          Posted on {{ review.created_at|date:"M d, Y" }}
+          {% if review.updated_at != review.created_at %} (edited){% endif %}
+        </div>
+
+        {% if review.comment %}
+        <p class="mb-2 text-dark">{{ review.comment }}</p>
+        {% endif %}
+
+        {% if user.is_authenticated and review.user_id != user.id %}
+        <div class="text-right">
+          <a href="{% url 'report_review' review.id %}" class="text-muted small text-decoration-none">
+            <i class="fas fa-flag text-danger me-1"></i> Report Review
+          </a>
+        </div>
+        {% endif %}
+      </div>
+      {% empty %}
+      <p class="text-muted py-3 text-center mb-0">No reviews published yet. Be the first verified viewer to review!</p>
+      {% endfor %}
+    </div>
+
+    <!-- Recommendations Section -->
+    {% if similar_movies %}
+    <div class="mt-5">
+      <h4><i class="fas fa-thumbs-up text-primary me-2"></i> Similar Movies (Genre & Language)</h4>
+      <div class="recommend-row">
+        {% for m in similar_movies %}
+        <a href="{% url 'theater_list' m.id %}" class="recommend-card">
+          {% if m.image %}
+          <img src="{{ m.image.url }}" alt="{{ m.name }}">
+          {% endif %}
+          <div class="title">{{ m.name }}</div>
+          <small class="text-muted">{{ m.language.name|default:"" }}</small>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if trending_movies %}
+    <div class="mt-4">
+      <h4><i class="fas fa-fire text-danger me-2"></i> Trending Now</h4>
+      <div class="recommend-row">
+        {% for m in trending_movies %}
+        <a href="{% url 'theater_list' m.id %}" class="recommend-card">
+          {% if m.image %}
+          <img src="{{ m.image.url }}" alt="{{ m.name }}">
+          {% endif %}
+          <div class="title">{{ m.name }}</div>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if recent_movies %}
+    <div class="mt-4 mb-5">
+      <h4><i class="fas fa-film text-info me-2"></i> Recently Released</h4>
+      <div class="recommend-row">
+        {% for m in recent_movies %}
+        <a href="{% url 'theater_list' m.id %}" class="recommend-card">
+          {% if m.image %}
+          <img src="{{ m.image.url }}" alt="{{ m.name }}">
+          {% endif %}
+          <div class="title">{{ m.name }}</div>
+          <small class="text-muted">{{ m.release_date|date:"M Y" }}</small>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</body>
+{% endblock %}

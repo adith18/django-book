@@ -1,0 +1,36 @@
+{% extends "users/base.html" %}
+{% block content %}
+<div class="container mt-5">
+  <div class="row">
+    <div class="col-lg-6 mx-auto">
+      <div class="card shadow">
+        <div class="card-body">
+          <h4 class="card-title mb-3">Report Review</h4>
+          <p class="text-muted">
+            Reporting {{ review.user.username }}'s review of "{{ review.movie.name }}".
+          </p>
+          <form method="POST">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label for="reason" class="form-label">Reason</label>
+              <select name="reason" id="reason" class="form-select">
+                <option value="spam">Spam or advertising</option>
+                <option value="offensive">Offensive or abusive language</option>
+                <option value="spoiler">Unmarked spoilers</option>
+                <option value="irrelevant">Not relevant to the movie</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="details" class="form-label">Additional details (optional)</label>
+              <textarea name="details" id="details" class="form-control" rows="3"></textarea>
+            </div>
+            <button type="submit" class="btn btn-danger">Submit Report</button>
+            <a href="{% url 'theater_list' review.movie.id %}" class="btn btn-outline-secondary">Cancel</a>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
