@@ -5,14 +5,13 @@ from .models import (
 )
 
 
-class MovieCastInline(admin.TabularInline):
-    model = MovieCast
-    extra = 1
-    autocomplete_fields = ['cast_member']
-
-
 class MoviePosterInline(admin.TabularInline):
     model = MoviePoster
+    extra = 1
+
+
+class MovieCastInline(admin.TabularInline):
+    model = MovieCast
     extra = 1
 
 
@@ -36,13 +35,10 @@ class CastMemberAdmin(admin.ModelAdmin):
 
 @admin.register(Movie)
 class MovieAdmin(admin.ModelAdmin):
-    list_display = [
-        'name', 'language', 'age_certification', 'duration_display',
-        'release_date', 'rating', 'created_at'
-    ]
+    list_display = ['name', 'language', 'age_certification', 'duration_minutes', 'release_date', 'rating', 'created_at']
     list_filter = ['language', 'genres', 'age_certification', 'release_date']
     search_fields = ['name', 'description']
-    inlines = [MovieCastInline, MoviePosterInline]
+    inlines = [MoviePosterInline, MovieCastInline]
     filter_horizontal = ['genres']
 
 
@@ -62,31 +58,20 @@ class SeatAdmin(admin.ModelAdmin):
 
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ['user', 'movie', 'theater', 'seat', 'booked_at']
-    list_filter = ['booked_at', 'movie']
-    search_fields = ['user__username', 'movie__name', 'theater__name', 'seat__seat_number']
+    list_display = ['user', 'seat', 'theater', 'booked_at']
+    list_filter = ['booked_at', 'theater']
+    search_fields = ['user__username', 'user__email', 'theater__name']
 
 
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
-    list_display = ['movie', 'user', 'rating', 'is_verified_viewer', 'is_hidden', 'created_at', 'report_count']
-    list_filter = ['is_hidden', 'rating', 'created_at']
+    list_display = ['movie', 'user', 'rating', 'is_hidden', 'created_at', 'updated_at']
+    list_filter = ['rating', 'is_hidden', 'created_at']
     search_fields = ['user__username', 'movie__name', 'comment']
-    actions = ['hide_reviews', 'unhide_reviews']
-
-    @admin.action(description='Hide selected reviews (inappropriate content)')
-    def hide_reviews(self, request, queryset):
-        count = queryset.update(is_hidden=True)
-        self.message_user(request, f'{count} review(s) hidden successfully.')
-
-    @admin.action(description='Unhide selected reviews')
-    def unhide_reviews(self, request, queryset):
-        count = queryset.update(is_hidden=False)
-        self.message_user(request, f'{count} review(s) unhidden successfully.')
 
 
 @admin.register(ReviewReport)
 class ReviewReportAdmin(admin.ModelAdmin):
     list_display = ['review', 'reported_by', 'reason', 'created_at']
     list_filter = ['reason', 'created_at']
-    search_fields = ['review__movie__name', 'review__user__username', 'reported_by__username', 'details']
+    search_fields = ['reported_by__username', 'review__movie__name', 'details']

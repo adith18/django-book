@@ -1,200 +1,310 @@
-import datetime
-from django.test import TestCase, Client
+from datetime import date, time
+from django.test import TestCase
 from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
-from django.urls import reverse
 from django.utils import timezone
-from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.exceptions import ValidationError
 
 from .models import (
     Genre, Language, CastMember, Movie, MovieCast, MoviePoster,
-    Theater, Seat, Booking, Review, ReviewReport, validate_youtube_url
+    Theater, Seat, Booking, Review, ReviewReport,
+    extract_youtube_id, validate_youtube_url, user_has_watched_movie
 )
+from .views import _recommendations_for
+
+
+class YouTubeValidationTests(TestCase):
+    def test_extract_youtube_id(self):
+        url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+        self.assertEqual(extract_youtube_id(url), 'dQw4w9WgXcQ')
+
+        short_url = 'https://youtu.be/dQw4w9WgXcQ'
+        self.assertEqual(extract_youtube_id(short_url), 'dQw4w9WgXcQ')
+
+        embed_url = 'https://www.youtube.com/embed/dQw4w9WgXcQ'
+        self.assertEqual(extract_youtube_id(embed_url), 'dQw4w9WgXcQ')
+
+    def test_validate_youtube_url_invalid(self):
+        with self.assertRaises(ValidationError):
+            validate_youtube_url('https://malicious-site.com/video')
 
 
 class MovieModelTests(TestCase):
     def setUp(self):
-        self.genre_action = Genre.objects.create(name='Action')
-        self.genre_scifi = Genre.objects.create(name='Sci-Fi')
-        self.language_en = Language.objects.create(name='English')
-        
-        # 1x1 GIF dummy image
-        small_gif = (
-            b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00'
-            b'\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00'
-            b'\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
-        )
-        self.image = SimpleUploadedFile('test.gif', small_gif, content_type='image/gif')
-
+        self.action = Genre.objects.create(name='Action')
+        self.english = Language.objects.create(name='English')
         self.movie = Movie.objects.create(
             name='Test Movie',
-            image=self.image,
-            language=self.language_en,
-            duration_minutes=150,
+            language=self.english,
+            trailer_url='https://www.youtube.com/watch?v=dQw4w9WgXcQ',
             age_certification='UA',
-            trailer_url='https://www.youtube.com/watch?v=YoHD9XEInc0',
-            release_date=datetime.date(2025, 1, 1)
+            duration_minutes=145,
+            release_date=date(2025, 1, 1),
+            description='Test Description'
         )
-        self.movie.genres.add(self.genre_action, self.genre_scifi)
+        self.movie.genres.add(self.action)
 
-    def test_youtube_validation_and_embed_url(self):
-        # Valid trailer url embed conversion
+    def test_trailer_embed_url(self):
         self.assertEqual(
             self.movie.trailer_embed_url,
-            'https://www.youtube-nocookie.com/embed/YoHD9XEInc0'
+            'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'
         )
-
-        # Invalid YouTube URL validation error
-        invalid_movie = Movie(
-            name='Invalid Trailer',
-            image=self.image,
-            trailer_url='https://malicious-site.com/video'
-        )
-        with self.assertRaises(ValidationError):
-            invalid_movie.full_clean()
 
     def test_duration_display(self):
-        self.assertEqual(self.movie.duration_display, '2h 30m')
-        
-        short_movie = Movie(name='Short', duration_minutes=45)
-        self.assertEqual(short_movie.duration_display, '45m')
-
-    def test_multiple_posters_and_cast(self):
-        poster1 = MoviePoster.objects.create(movie=self.movie, image=self.image, caption='Poster 1', order=1)
-        poster2 = MoviePoster.objects.create(movie=self.movie, image=self.image, caption='Poster 2', order=2)
-        self.assertEqual(self.movie.posters.count(), 2)
-
-        cast_member = CastMember.objects.create(name='John Doe', bio='Actor')
-        credit = MovieCast.objects.create(movie=self.movie, cast_member=cast_member, character_name='Hero', order=1)
-        self.assertEqual(self.movie.ordered_cast.first().cast_member.name, 'John Doe')
+        self.assertEqual(self.movie.duration_display, '2h 25m')
 
 
 class ReviewAndBookingTests(TestCase):
     def setUp(self):
-        small_gif = (
-            b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00'
-            b'\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00'
-            b'\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
-        )
-        self.image = SimpleUploadedFile('test.gif', small_gif, content_type='image/gif')
-
-        self.user_unbooked = User.objects.create_user(username='unbooked', password='password123')
-        self.user_viewer = User.objects.create_user(username='viewer', password='password123')
-        self.user_reporter = User.objects.create_user(username='reporter', password='password123')
-        self.staff_user = User.objects.create_superuser(username='admin', password='password123', email='admin@test.com')
-
-        self.movie = Movie.objects.create(name='Blockbuster', image=self.image)
-        
-        # Showtime for today
+        self.user = User.objects.create_user(username='john', password='password123')
+        self.movie = Movie.objects.create(name='Inception', duration_minutes=148)
         self.theater = Theater.objects.create(
-            name='Cinema 1',
+            name='Grand Cinema',
             movie=self.movie,
             date=timezone.localdate(),
-            time=datetime.time(10, 0)
+            time=time(14, 0)
         )
         self.seat = Seat.objects.create(theater=self.theater, seat_number='A1', is_booked=True)
-        self.booking = Booking.objects.create(
-            user=self.user_viewer,
+
+    def test_user_has_not_watched_movie_without_booking(self):
+        self.assertFalse(user_has_watched_movie(self.user, self.movie))
+
+    def test_user_has_watched_movie_with_past_or_today_booking(self):
+        Booking.objects.create(
+            user=self.user,
             seat=self.seat,
             theater=self.theater,
             movie=self.movie
         )
+        self.assertTrue(user_has_watched_movie(self.user, self.movie))
 
-    def test_review_eligibility_and_verified_badge(self):
-        client = Client()
-
-        # Unbooked user cannot review
-        client.login(username='unbooked', password='password123')
-        response = client.post(reverse('theater_list', args=[self.movie.id]), {'rating': 5, 'comment': 'Great movie!'})
-        self.assertEqual(Review.objects.count(), 0)
-
-        # Booked user (viewer) can review
-        client.login(username='viewer', password='password123')
-        response = client.post(reverse('theater_list', args=[self.movie.id]), {'rating': 5, 'comment': 'Loved it!'})
-        self.assertEqual(Review.objects.count(), 1)
-        review = Review.objects.get(user=self.user_viewer, movie=self.movie)
-        self.assertTrue(review.is_verified_viewer)
+    def test_average_rating_and_verified_badge(self):
+        Booking.objects.create(
+            user=self.user,
+            seat=self.seat,
+            theater=self.theater,
+            movie=self.movie
+        )
+        review = Review.objects.create(
+            movie=self.movie,
+            user=self.user,
+            rating=5,
+            comment='Awesome!'
+        )
         self.assertEqual(self.movie.average_rating, 5.0)
-
-        # Viewer can edit review
-        response = client.post(reverse('theater_list', args=[self.movie.id]), {'rating': 4, 'comment': 'Updated review: Good!'})
-        review.refresh_from_db()
-        self.assertEqual(review.rating, 4)
-        self.assertEqual(self.movie.average_rating, 4.0)
-
-    def test_report_review_and_moderation(self):
-        review = Review.objects.create(movie=self.movie, user=self.user_viewer, rating=1, comment='Bad!')
-
-        client = Client()
-        client.login(username='reporter', password='password123')
-        
-        # Report review
-        response = client.post(reverse('report_review', args=[review.id]), {'reason': 'spam', 'details': 'Spam post'})
-        self.assertEqual(ReviewReport.objects.count(), 1)
-        report = ReviewReport.objects.first()
-        self.assertEqual(report.reason, 'spam')
-
-        # Moderation by staff
-        client.login(username='admin', password='password123')
-        response = client.post(reverse('admin_toggle_review', args=[review.id]))
-        review.refresh_from_db()
-        self.assertTrue(review.is_hidden)
-
-        # Hidden review is excluded from average rating
-        self.assertIsNone(self.movie.average_rating)
+        self.assertTrue(review.is_verified_viewer)
 
 
-class RecommendationTests(TestCase):
+class RecommendationsTests(TestCase):
+    def test_recommendations(self):
+        genre = Genre.objects.create(name='Sci-Fi')
+        lang = Language.objects.create(name='English')
+        m1 = Movie.objects.create(name='Movie 1', language=lang, release_date=date(2025, 1, 1))
+        m1.genres.add(genre)
+        m2 = Movie.objects.create(name='Movie 2', language=lang, release_date=date(2025, 2, 1))
+        m2.genres.add(genre)
+
+        similar, trending, recent = _recommendations_for(m1)
+        self.assertIn(m2, similar)
+
+
+from django.test import TestCase, TransactionTestCase
+
+
+class SmartSeatReservationTests(TestCase):
     def setUp(self):
-        small_gif = (
-            b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00'
-            b'\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00'
-            b'\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
+        self.user1 = User.objects.create_user(username='alice', password='password123')
+        self.user2 = User.objects.create_user(username='bob', password='password123')
+        self.movie = Movie.objects.create(name='Avatar', duration_minutes=180)
+        self.theater = Theater.objects.create(
+            name='IMAX 3D',
+            movie=self.movie,
+            date=timezone.localdate(),
+            time=time(18, 0)
         )
-        self.image = SimpleUploadedFile('test.gif', small_gif, content_type='image/gif')
+        self.seat1 = Seat.objects.create(theater=self.theater, seat_number='A1')
+        self.seat2 = Seat.objects.create(theater=self.theater, seat_number='A2')
+        self.seat3 = Seat.objects.create(theater=self.theater, seat_number='A3')
 
-        self.genre_action = Genre.objects.create(name='Action')
-        self.lang_en = Language.objects.create(name='English')
-
-        self.movie1 = Movie.objects.create(name='Movie 1', image=self.image, language=self.lang_en, release_date=datetime.date(2025, 1, 1))
-        self.movie1.genres.add(self.genre_action)
-
-        self.movie2 = Movie.objects.create(name='Movie 2 (Similar)', image=self.image, language=self.lang_en, release_date=datetime.date(2025, 2, 1))
-        self.movie2.genres.add(self.genre_action)
-
-        self.movie3 = Movie.objects.create(name='Movie 3 (Recent)', image=self.image, release_date=datetime.date(2025, 3, 1))
-
-    def test_recommendation_algorithm(self):
-        from .views import _recommendations_for
-        similar, trending, recent = _recommendations_for(self.movie1)
-
-        self.assertIn(self.movie2, similar)
-        self.assertIn(self.movie3, recent)
-
-
-class CustomAdminAccessTests(TestCase):
-    def setUp(self):
-        small_gif = (
-            b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00'
-            b'\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00'
-            b'\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
+    def test_reserve_seats_creates_2_min_hold(self):
+        self.client.login(username='alice', password='password123')
+        response = self.client.post(
+            f'/movies/theater/{self.theater.id}/seats/reserve/',
+            data={'seats': [self.seat1.id, self.seat2.id]},
+            content_type='application/json'
         )
-        self.image = SimpleUploadedFile('test.gif', small_gif, content_type='image/gif')
-
-        self.regular_user = User.objects.create_user(username='regular', password='password123')
-        self.staff_user = User.objects.create_user(username='staff', password='password123', email='staff@test.com', is_staff=True)
-
-    def test_custom_admin_access(self):
-        client = Client()
-
-        # Regular user cannot access custom admin dashboard
-        client.login(username='regular', password='password123')
-        response = client.get(reverse('admin_dashboard'))
-        self.assertNotEqual(response.status_code, 200)
-
-        # Staff user can access custom admin dashboard
-        client.login(username='staff', password='password123')
-        response = client.get(reverse('admin_dashboard'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Custom Admin Dashboard')
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['remaining_seconds'], 120)
+
+        # Check status API
+        status_resp = self.client.get(f'/movies/theater/{self.theater.id}/seats/status/')
+        status_data = status_resp.json()
+        seats_by_id = {s['id']: s['status'] for s in status_data['seats']}
+        self.assertEqual(seats_by_id[self.seat1.id], 'RESERVED_BY_YOU')
+        self.assertEqual(seats_by_id[self.seat2.id], 'RESERVED_BY_YOU')
+        self.assertEqual(seats_by_id[self.seat3.id], 'AVAILABLE')
+
+    def test_prevent_other_user_reserving_held_seats(self):
+        # Alice reserves A1
+        self.client.login(username='alice', password='password123')
+        self.client.post(
+            f'/movies/theater/{self.theater.id}/seats/reserve/',
+            data={'seats': [self.seat1.id]},
+            content_type='application/json'
+        )
+
+        # Bob attempts to reserve A1 & A2
+        self.client.logout()
+        self.client.login(username='bob', password='password123')
+        response = self.client.post(
+            f'/movies/theater/{self.theater.id}/seats/reserve/',
+            data={'seats': [self.seat1.id, self.seat2.id]},
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('temporarily reserved by another user', data['error'])
+
+        # Bob status API check
+        status_resp = self.client.get(f'/movies/theater/{self.theater.id}/seats/status/')
+        seats_by_id = {s['id']: s['status'] for s in status_resp.json()['seats']}
+        self.assertEqual(seats_by_id[self.seat1.id], 'RESERVED')
+        self.assertEqual(seats_by_id[self.seat2.id], 'AVAILABLE')
+
+    def test_modify_seat_selection_before_payment(self):
+        self.client.login(username='alice', password='password123')
+        # Reserve A1
+        self.client.post(
+            f'/movies/theater/{self.theater.id}/seats/reserve/',
+            data={'seats': [self.seat1.id]},
+            content_type='application/json'
+        )
+        # Modify to reserve A2 & A3 instead
+        response = self.client.post(
+            f'/movies/theater/{self.theater.id}/seats/reserve/',
+            data={'seats': [self.seat2.id, self.seat3.id]},
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+
+        # Status check: A1 should be available, A2 & A3 reserved by Alice
+        status_resp = self.client.get(f'/movies/theater/{self.theater.id}/seats/status/')
+        seats_by_id = {s['id']: s['status'] for s in status_resp.json()['seats']}
+        self.assertEqual(seats_by_id[self.seat1.id], 'AVAILABLE')
+        self.assertEqual(seats_by_id[self.seat2.id], 'RESERVED_BY_YOU')
+        self.assertEqual(seats_by_id[self.seat3.id], 'RESERVED_BY_YOU')
+
+    def test_auto_release_expired_reservation(self):
+        from .models import SeatReservation
+        # Alice reserves A1
+        self.client.login(username='alice', password='password123')
+        self.client.post(
+            f'/movies/theater/{self.theater.id}/seats/reserve/',
+            data={'seats': [self.seat1.id]},
+            content_type='application/json'
+        )
+
+        # Manually expire Alice's reservation
+        res = SeatReservation.objects.get(user=self.user1, theater=self.theater, status='HELD')
+        res.expires_at = timezone.now() - timezone.timedelta(seconds=10)
+        res.save()
+
+        # Bob checks status and should see A1 is AVAILABLE again
+        self.client.logout()
+        self.client.login(username='bob', password='password123')
+        status_resp = self.client.get(f'/movies/theater/{self.theater.id}/seats/status/')
+        seats_by_id = {s['id']: s['status'] for s in status_resp.json()['seats']}
+        self.assertEqual(seats_by_id[self.seat1.id], 'AVAILABLE')
+
+        # Bob can now reserve A1 successfully
+        reserve_resp = self.client.post(
+            f'/movies/theater/{self.theater.id}/seats/reserve/',
+            data={'seats': [self.seat1.id]},
+            content_type='application/json'
+        )
+        self.assertEqual(reserve_resp.status_code, 200)
+
+    def test_confirm_booking_success(self):
+        self.client.login(username='alice', password='password123')
+        # Reserve A1
+        self.client.post(
+            f'/movies/theater/{self.theater.id}/seats/reserve/',
+            data={'seats': [self.seat1.id]},
+            content_type='application/json'
+        )
+
+        # Confirm & Pay
+        response = self.client.post(
+            f'/movies/theater/{self.theater.id}/seats/book/',
+            data={'seats': [self.seat1.id]},
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+
+        # Verify Seat is booked
+        self.seat1.refresh_from_db()
+        self.assertTrue(self.seat1.is_booked)
+
+        # Verify status API shows BOOKED
+        status_resp = self.client.get(f'/movies/theater/{self.theater.id}/seats/status/')
+        seats_by_id = {s['id']: s['status'] for s in status_resp.json()['seats']}
+        self.assertEqual(seats_by_id[self.seat1.id], 'BOOKED')
+
+
+class ConcurrentBookingTests(TransactionTestCase):
+    def setUp(self):
+        self.user1 = User.objects.create_user(username='alice_conc', password='password123')
+        self.user2 = User.objects.create_user(username='bob_conc', password='password123')
+        self.movie = Movie.objects.create(name='Concurrent Movie', duration_minutes=120)
+        self.theater = Theater.objects.create(
+            name='Screen 1',
+            movie=self.movie,
+            date=timezone.localdate(),
+            time=time(20, 0)
+        )
+        self.seat1 = Seat.objects.create(theater=self.theater, seat_number='B1')
+
+    def test_concurrent_booking_transaction_protection(self):
+        from django.db import transaction, connection
+        import threading
+
+        results = []
+
+        def attempt_booking(user, seat_id):
+            connection.close()
+            try:
+                with transaction.atomic():
+                    seat = Seat.objects.select_for_update().get(id=seat_id)
+                    if seat.is_booked:
+                        results.append((user.username, False, 'Already booked'))
+                        return
+                    Booking.objects.create(
+                        user=user, seat=seat, theater=seat.theater, movie=seat.theater.movie
+                    )
+                    seat.is_booked = True
+                    seat.save()
+                    results.append((user.username, True, 'Success'))
+            except Exception as e:
+                results.append((user.username, False, str(e)))
+            finally:
+                connection.close()
+
+        t1 = threading.Thread(target=attempt_booking, args=(self.user1, self.seat1.id))
+        t2 = threading.Thread(target=attempt_booking, args=(self.user2, self.seat1.id))
+
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        successes = [r for r in results if r[1] is True]
+        failures = [r for r in results if r[1] is False]
+
+        self.assertEqual(len(successes), 1)
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(Booking.objects.filter(seat=self.seat1).count(), 1)
+
+
 

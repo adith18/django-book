@@ -3,84 +3,100 @@
   <div class="row">
     <div class="col-lg-8 mx-auto">
       <!-- Movie and Theater Info -->
-      <div class="card mb-4">
+      <div class="card mb-4 shadow-sm">
         <div class="card-body">
-          <div
-            class="d-flex justify-content-between align-items-center flex-wrap"
-          >
+          <div class="d-flex justify-content-between align-items-center flex-wrap">
             <div>
-              <h4 class="card-title">{{ theater.movie.name }}</h4>
-              <p class="card-text text-muted">
-                {{ theater.name }} | {{ theater.time }}
+              <h4 class="card-title font-weight-bold mb-1">{{ theater.movie.name }}</h4>
+              <p class="card-text text-muted mb-0">
+                {{ theater.name }} | {{ theater.date }} at {{ theater.time }}
               </p>
             </div>
             <div class="mt-2 mt-sm-0">
-              <button class="btn btn-outline-primary me-2 mb-2 mb-sm-0">
-                2D
-              </button>
-              <button class="btn btn-outline-primary me-2 mb-2 mb-sm-0">
-                3D
-              </button>
-              <button class="btn btn-outline-primary mb-2 mb-sm-0">
-                IMAX 3D
-              </button>
-              <button class="btn btn-outline-primary mb-2 mb-sm-0">
-                {{seats|length}} Tickets
-              </button>
+              <span class="badge bg-secondary me-2 p-2">2D</span>
+              <span class="badge bg-info text-dark p-2">{{ seats|length }} Total Seats</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Seat Selection -->
-      <div class="card">
-        <div class="card-body">
-          <h5 class="card-title text-center mb-4">Select Your Seats</h5>
-          <div class="screen">All eyes this way please!</div>
+      <!-- Reservation Timer & Notification Banner -->
+      <div id="status-message-alert" class="alert alert-danger d-none mb-3 text-center" role="alert"></div>
+      
+      {% if error_message %}
+      <div class="alert alert-danger mb-3 text-center" role="alert">
+        {{ error_message }}
+      </div>
+      {% endif %}
 
-          <form method="POST">
+      <div id="reservation-timer-banner" class="alert alert-warning text-center d-none mb-4 shadow-sm" role="alert">
+        <i class="bi bi-clock-history me-1"></i>
+        <strong>Seats Temporarily Reserved!</strong>
+        <span> Complete payment in <span id="timer-countdown" class="badge bg-danger fs-6 ms-1">02:00</span></span>
+        <button type="button" id="btn-release" class="btn btn-sm btn-outline-danger ms-3">
+          Release / Change Seats
+        </button>
+      </div>
+
+      <!-- Seat Selection Grid -->
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title text-center mb-3">Select Your Seats</h5>
+          <div class="screen mb-4">All eyes this way please!</div>
+
+          <form id="seat-booking-form" method="POST" action="{% url 'book_seats' theater.id %}">
             {% csrf_token %}
-            <div class="d-flex justify-content-center flex-wrap mb-4">
+            <div id="seat-grid" class="d-flex justify-content-center flex-wrap mb-4">
               {% for seat in seats %}
-              <div class="seat {% if seat.is_booked %}sold{% endif %}">
-                {% if not seat.is_booked %}
+              <div class="seat-container m-1">
                 <input
                   type="checkbox"
                   name="seats"
                   value="{{ seat.id }}"
-                  class="d-none"
+                  class="d-none seat-checkbox"
                   id="seat-{{ seat.id }}"
+                  data-seat-id="{{ seat.id }}"
+                  data-seat-number="{{ seat.seat_number }}"
                 />
                 <label
                   for="seat-{{ seat.id }}"
-                  class="w-100 h-100 d-flex align-items-center justify-content-center"
-                  >{{ seat.seat_number }}</label
+                  class="seat-box seat-available d-flex align-items-center justify-content-center"
+                  id="seat-box-{{ seat.id }}"
+                  title="Seat {{ seat.seat_number }}"
                 >
-                {% else %} {{ seat.seat_number }} {% endif %}
+                  {{ seat.seat_number }}
+                </label>
               </div>
               {% endfor %}
             </div>
 
             <!-- Seat Legend -->
-            <div class="d-flex justify-content-center mb-4">
-              <div class="d-flex align-items-center me-4">
-                <div class="seat" style="background-color: white"></div>
-                <span class="ms-2">Available</span>
+            <div class="d-flex justify-content-center flex-wrap mb-4 py-2 border-top border-bottom bg-light rounded">
+              <div class="d-flex align-items-center me-4 my-1">
+                <div class="seat-legend-box seat-available me-2"></div>
+                <span class="small fw-semibold">Available</span>
               </div>
-              <div class="d-flex align-items-center me-4">
-                <div class="seat selected"></div>
-                <span class="ms-2">Selected</span>
+              <div class="d-flex align-items-center me-4 my-1">
+                <div class="seat-legend-box seat-reserved-you me-2"></div>
+                <span class="small fw-semibold">Reserved by You</span>
               </div>
-              <div class="d-flex align-items-center">
-                <div class="seat sold"></div>
-                <span class="ms-2">Sold</span>
+              <div class="d-flex align-items-center me-4 my-1">
+                <div class="seat-legend-box seat-reserved-other me-2"></div>
+                <span class="small fw-semibold">Reserved (Hold)</span>
+              </div>
+              <div class="d-flex align-items-center my-1">
+                <div class="seat-legend-box seat-sold me-2"></div>
+                <span class="small fw-semibold">Booked / Sold</span>
               </div>
             </div>
 
-            <!-- Book Button -->
+            <!-- Action Buttons -->
             <div class="text-center">
-              <button type="submit" class="btn btn-success btn-lg">
-                Book Selected Seats
+              <button type="button" id="btn-reserve" class="btn btn-warning btn-lg me-2 text-dark font-weight-bold">
+                Hold Selected Seats (2 Mins)
+              </button>
+              <button type="submit" id="btn-book" class="btn btn-success btn-lg font-weight-bold">
+                Confirm & Pay
               </button>
             </div>
           </form>
@@ -89,82 +105,271 @@
     </div>
   </div>
 </div>
+
 <style>
-  body {
-    font-family: Arial, sans-serif;
-  }
-  .seat {
-    width: 30px;
-    height: 30px;
-    border: 1px solid #28a745;
-    margin: 3px;
-    text-align: center;
-    line-height: 30px;
-    cursor: pointer;
-    border-radius: 5px;
-    transition: background-color 0.3s, color 0.3s;
-  }
-  .seat:hover {
-    background-color: #28a745;
-    color: white;
-  }
-  .seat.selected {
-    background-color: #28a745;
-    color: white;
-  }
-  .seat.sold {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
   .screen {
-    margin: 20px 0;
-    background-color: #ccc;
-    height: 50px;
+    background: linear-gradient(180deg, #e0e0e0 0%, #cfcfcf 100%);
+    height: 40px;
+    line-height: 40px;
     text-align: center;
-    line-height: 50px;
-    color: #666;
+    color: #555;
+    font-weight: 600;
+    letter-spacing: 1px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
-  .footer {
-    background-color: #333;
-    color: #ccc;
-    padding: 20px 0;
+  .seat-box {
+    width: 38px;
+    height: 38px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease-in-out;
   }
-  .footer a {
-    color: #ccc;
-    text-decoration: none;
+  .seat-legend-box {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
   }
-  .footer a:hover {
-    text-decoration: underline;
+  
+  /* Seat Status Styles */
+  .seat-available {
+    background-color: #ffffff;
+    border: 2px solid #28a745;
+    color: #28a745;
   }
-  .footer .col-md-2,
-  .footer .col-md-3 {
-    margin-bottom: 20px;
+  .seat-available:hover {
+    background-color: #28a745;
+    color: #ffffff;
   }
-  .footer .social-icons i {
-    font-size: 20px;
-    margin: 0 10px;
+  .seat-selected-temp {
+    background-color: #20c997;
+    border: 2px solid #198754;
+    color: #ffffff;
+  }
+  .seat-reserved-you {
+    background-color: #0d6efd;
+    border: 2px solid #0a58ca;
+    color: #ffffff;
+    box-shadow: 0 0 6px rgba(13, 110, 253, 0.5);
+  }
+  .seat-reserved-other {
+    background-color: #ffc107;
+    border: 2px solid #fd7e14;
+    color: #212529;
+    cursor: not-allowed;
+    opacity: 0.85;
+  }
+  .seat-sold {
+    background-color: #6c757d;
+    border: 2px solid #495057;
+    color: #ffffff;
+    cursor: not-allowed;
+    opacity: 0.7;
   }
 </style>
-<!-- <h1>Seats for {{theater.name}} - {{theater.movie.name}}</h1>
-{% if error %}
-<p style="color:red;">{{error}}</p>
-{% endif %}
-<form method="POST">
-    {% csrf_token %}
-    <ul>
-        {% for seat in seats %}
-        <li>
-          Seats{{seat.seat_number}}:
-          {% if seat.is_booked %}
-          <strong>Booked seat {{seat.seat_number}}</strong>
-          {% else %}
-          <input type="checkbox" name="seats" value="{{seat.id}}">
-          <strong>Available seat {{seat.seat_number}}</strong>
-          {% endif%}
-        </li>
-        {% endfor %}
-      </ul>
-      <button type="submit">Book selected seats</button>
-</form> -->
 
-{% endblock %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const theaterId = {{ theater.id }};
+  const statusApiUrl = "{% url 'api_seat_status' theater.id %}";
+  const reserveApiUrl = "{% url 'reserve_seats' theater.id %}";
+  const releaseApiUrl = "{% url 'release_reservation' theater.id %}";
+  const bookForm = document.getElementById('seat-booking-form');
+  
+  const timerBanner = document.getElementById('reservation-timer-banner');
+  const timerCountdown = document.getElementById('timer-countdown');
+  const alertBox = document.getElementById('status-message-alert');
+  const btnReserve = document.getElementById('btn-reserve');
+  const btnRelease = document.getElementById('btn-release');
+  const btnBook = document.getElementById('btn-book');
+
+  let remainingSeconds = 0;
+  let timerInterval = null;
+  let pollInterval = null;
+  let userReservedSeatIds = [];
+
+  function showAlert(msg, type = 'danger') {
+    alertBox.className = `alert alert-${type} mb-3 text-center`;
+    alertBox.textContent = msg;
+    alertBox.classList.remove('d-none');
+    setTimeout(() => {
+      alertBox.classList.add('d-none');
+    }, 5000);
+  }
+
+  function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  function startTimer(seconds) {
+    clearInterval(timerInterval);
+    remainingSeconds = seconds;
+    if (remainingSeconds <= 0) {
+      handleTimerExpiration();
+      return;
+    }
+    
+    timerBanner.classList.remove('d-none');
+    timerCountdown.textContent = formatTime(remainingSeconds);
+
+    timerInterval = setInterval(() => {
+      remainingSeconds--;
+      if (remainingSeconds <= 0) {
+        clearInterval(timerInterval);
+        handleTimerExpiration();
+      } else {
+        timerCountdown.textContent = formatTime(remainingSeconds);
+      }
+    }, 1000);
+  }
+
+  function stopTimer() {
+    clearInterval(timerInterval);
+    timerBanner.classList.add('d-none');
+  }
+
+  function handleTimerExpiration() {
+    stopTimer();
+    userReservedSeatIds = [];
+    showAlert("Your 2-minute seat reservation has expired! Please select seats again.", "warning");
+    fetchSeatStatus();
+  }
+
+  function updateSeatUI(seatsData, userReservation) {
+    userReservedSeatIds = userReservation ? userReservation.seat_ids : [];
+
+    seatsData.forEach(seat => {
+      const checkbox = document.getElementById(`seat-${seat.id}`);
+      const label = document.getElementById(`seat-box-${seat.id}`);
+      if (!checkbox || !label) return;
+
+      label.className = 'seat-box d-flex align-items-center justify-content-center ';
+
+      if (seat.status === 'BOOKED') {
+        label.classList.add('seat-sold');
+        checkbox.disabled = true;
+        checkbox.checked = false;
+      } else if (seat.status === 'RESERVED') {
+        label.classList.add('seat-reserved-other');
+        checkbox.disabled = true;
+        checkbox.checked = false;
+        label.title = `Seat ${seat.seat_number} (Reserved by another user)`;
+      } else if (seat.status === 'RESERVED_BY_YOU') {
+        label.classList.add('seat-reserved-you');
+        checkbox.disabled = false;
+        checkbox.checked = true;
+        label.title = `Seat ${seat.seat_number} (Reserved by You)`;
+      } else {
+        checkbox.disabled = false;
+        if (checkbox.checked && !userReservedSeatIds.includes(seat.id)) {
+          label.classList.add('seat-selected-temp');
+        } else {
+          label.classList.add('seat-available');
+        }
+        label.title = `Seat ${seat.seat_number} (Available)`;
+      }
+    });
+
+    if (userReservation && userReservation.remaining_seconds > 0) {
+      startTimer(userReservation.remaining_seconds);
+      btnBook.textContent = "Confirm & Pay (Reserved)";
+    } else {
+      stopTimer();
+      btnBook.textContent = "Confirm & Pay";
+    }
+  }
+
+  function fetchSeatStatus() {
+    fetch(statusApiUrl, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        updateSeatUI(data.seats, data.user_reservation);
+      }
+    })
+    .catch(err => console.error("Error fetching seat status:", err));
+  }
+
+  document.querySelectorAll('.seat-checkbox').forEach(chk => {
+    chk.addEventListener('change', function() {
+      const label = document.getElementById(`seat-box-${this.value}`);
+      if (!label) return;
+      if (this.checked) {
+        label.classList.remove('seat-available');
+        label.classList.add('seat-selected-temp');
+      } else {
+        label.classList.remove('seat-selected-temp');
+        label.classList.add('seat-available');
+      }
+    });
+  });
+
+  btnReserve.addEventListener('click', function() {
+    const selectedBoxes = Array.from(document.querySelectorAll('.seat-checkbox:checked'))
+                              .map(cb => parseInt(cb.value));
+
+    if (selectedBoxes.length === 0) {
+      showAlert("Please select at least one seat to reserve.");
+      return;
+    }
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    fetch(reserveApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify({ seats: selectedBoxes })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        showAlert(data.message, "success");
+        fetchSeatStatus();
+      } else {
+        showAlert(data.error || "Failed to reserve seats.");
+        fetchSeatStatus();
+      }
+    })
+    .catch(err => {
+      showAlert("Error reserving seats.");
+      console.error(err);
+    });
+  });
+
+  btnRelease.addEventListener('click', function() {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    fetch(releaseApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        stopTimer();
+        showAlert("Reservation cancelled. Seats released.", "info");
+        fetchSeatStatus();
+      }
+    });
+  });
+
+  fetchSeatStatus();
+  pollInterval = setInterval(fetchSeatStatus, 3000);
+});
+</script>
+{% endblock %}

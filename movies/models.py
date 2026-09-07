@@ -209,6 +209,46 @@ class Seat(models.Model):
         return f'Seat {self.seat_number} in {self.theater.name}'
 
 
+class SeatReservation(models.Model):
+    STATUS_CHOICES = [
+        ('HELD', 'Held'),
+        ('COMPLETED', 'Completed'),
+        ('EXPIRED', 'Expired'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='seat_reservations')
+    theater = models.ForeignKey(Theater, on_delete=models.CASCADE, related_name='seat_reservations')
+    seats = models.ManyToManyField(Seat, related_name='reservations')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='HELD')
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def is_active(self):
+        return self.status == 'HELD' and timezone.now() < self.expires_at
+
+    def release(self):
+        if self.status == 'HELD':
+            self.status = 'CANCELLED'
+            self.save(update_fields=['status'])
+
+    @classmethod
+    def cleanup_expired(cls, theater=None):
+        """Mark past held reservations as EXPIRED."""
+        now = timezone.now()
+        qs = cls.objects.filter(status='HELD', expires_at__lte=now)
+        if theater:
+            qs = qs.filter(theater=theater)
+        return qs.update(status='EXPIRED')
+
+    def __str__(self):
+        return f"Reservation #{self.id} by {self.user.username} for {self.theater.name}"
+
+
+
 class Booking(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     seat = models.OneToOneField(Seat, on_delete=models.CASCADE)
