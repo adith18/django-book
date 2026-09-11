@@ -307,4 +307,44 @@ class ConcurrentBookingTests(TransactionTestCase):
         self.assertEqual(Booking.objects.filter(seat=self.seat1).count(), 1)
 
 
+class AdminDashboardTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(username='admin', password='password123', email='admin@example.com')
+        self.normal_user = User.objects.create_user(username='regular', password='password123')
+        self.movie = Movie.objects.create(name='Dashboard Test Movie', duration_minutes=120)
+        self.review = Review.objects.create(movie=self.movie, user=self.normal_user, rating=4, comment='Good movie')
+        self.report = ReviewReport.objects.create(review=self.review, reported_by=self.admin, reason='spam')
+
+    def test_admin_dashboard_access_denied_for_non_staff(self):
+        self.client.login(username='regular', password='password123')
+        response = self.client.get('/movies/custom-admin/')
+        self.assertEqual(response.status_code, 302)
+
+    def test_admin_dashboard_access_granted_for_staff(self):
+        self.client.login(username='admin', password='password123')
+        response = self.client.get('/movies/custom-admin/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Dashboard Test Movie')
+
+    def test_moderate_review_toggle_hide(self):
+        self.client.login(username='admin', password='password123')
+        response = self.client.post(
+            f'/movies/custom-admin/review/{self.review.id}/moderate/',
+            data={'action': 'toggle_hide'}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.review.refresh_from_db()
+        self.assertTrue(self.review.is_hidden)
+
+    def test_moderate_review_delete(self):
+        self.client.login(username='admin', password='password123')
+        response = self.client.post(
+            f'/movies/custom-admin/review/{self.review.id}/moderate/',
+            data={'action': 'delete'}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Review.objects.filter(id=self.review.id).exists())
+
+
+
 

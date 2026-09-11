@@ -11,7 +11,8 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib import messages
 from .models import (
-    Movie, Theater, Seat, Booking, Review, ReviewReport, SeatReservation, user_has_watched_movie,
+    Movie, Theater, Seat, Booking, Review, ReviewReport, SeatReservation,
+    Genre, Language, CastMember, user_has_watched_movie,
 )
 
 
@@ -416,3 +417,58 @@ def cancel_booking(request, booking_id):
         return redirect('profile')
 
     return render(request, 'movies/cancel_booking.html', {'booking': booking})
+
+
+@login_required(login_url='login')
+def admin_dashboard(request):
+    """Custom admin interface for managing movies, genres, languages, cast, theaters, and review moderation."""
+    if not request.user.is_staff:
+        messages.error(request, "Access restricted to administrators.")
+        return redirect('movie_list')
+
+    total_movies = Movie.objects.count()
+    total_genres = Genre.objects.count()
+    total_languages = Language.objects.count()
+    total_cast = CastMember.objects.count()
+    total_theaters = Theater.objects.count()
+    total_bookings = Booking.objects.count()
+    total_reviews = Review.objects.count()
+
+    recent_reports = ReviewReport.objects.select_related('review', 'review__movie', 'review__user', 'reported_by').order_by('-created_at')[:20]
+    recent_movies = Movie.objects.order_by('-created_at')[:10]
+    recent_theaters = Theater.objects.select_related('movie').order_by('-date', '-time')[:10]
+
+    return render(request, 'movies/admin_dashboard.html', {
+        'total_movies': total_movies,
+        'total_genres': total_genres,
+        'total_languages': total_languages,
+        'total_cast': total_cast,
+        'total_theaters': total_theaters,
+        'total_bookings': total_bookings,
+        'total_reviews': total_reviews,
+        'recent_reports': recent_reports,
+        'recent_movies': recent_movies,
+        'recent_theaters': recent_theaters,
+    })
+
+
+@login_required(login_url='login')
+def moderate_review(request, review_id):
+    """Toggle visibility or delete a reported review from the custom admin interface."""
+    if not request.user.is_staff:
+        messages.error(request, "Access restricted to administrators.")
+        return redirect('movie_list')
+
+    review = get_object_or_404(Review, id=review_id)
+    action = request.POST.get('action')
+
+    if action == 'toggle_hide':
+        review.is_hidden = not review.is_hidden
+        review.save()
+        status_str = "hidden" if review.is_hidden else "visible"
+        messages.success(request, f"Review #{review.id} status updated to {status_str}.")
+    elif action == 'delete':
+        review.delete()
+        messages.success(request, f"Review #{review_id} deleted successfully.")
+
+    return redirect('admin_dashboard')

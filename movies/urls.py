@@ -9,4 +9,6 @@ urlpatterns = [
     path('theater/<int:theater_id>/seats/book/', views.book_seats, name='book_seats'),
     path('booking/<int:booking_id>/cancel/', views.cancel_booking, name='cancel_booking'),
     path('review/<int:review_id>/report/', views.report_review, name='report_review'),
-]
+    path('custom-admin/', views.admin_dashboard, name='admin_dashboard'),
+    path('custom-admin/review/<int:review_id>/moderate/', views.moderate_review, name='moderate_review'),
+]
