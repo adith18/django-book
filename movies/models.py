@@ -201,12 +201,19 @@ class Theater(models.Model):
 
 
 class Seat(models.Model):
+    SEAT_TYPE_CHOICES = [
+        ('standard', 'Standard'),
+        ('premium', 'Premium'),
+    ]
+
     theater = models.ForeignKey(Theater, on_delete=models.CASCADE, related_name='seats')
     seat_number = models.CharField(max_length=10)
     is_booked = models.BooleanField(default=False)
+    seat_type = models.CharField(max_length=10, choices=SEAT_TYPE_CHOICES, default='standard')
+    price = models.DecimalField(max_digits=8, decimal_places=2, default=150.00)
 
     def __str__(self):
-        return f'Seat {self.seat_number} in {self.theater.name}'
+        return f'Seat {self.seat_number} ({self.get_seat_type_display()}) in {self.theater.name}'
 
 
 class SeatReservation(models.Model):
@@ -255,6 +262,7 @@ class Booking(models.Model):
     theater = models.ForeignKey(Theater, on_delete=models.CASCADE)
     booked_at = models.DateTimeField(auto_now_add=True)
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE, null=True, blank=True)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
         return f'Booking by {self.user.username} for {self.seat.seat_number} at {self.theater.name}'

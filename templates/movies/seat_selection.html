@@ -1,229 +1,356 @@
 {% extends "users/base.html" %} {% block content %}
-<div class="container mt-5">
-  <div class="row">
-    <div class="col-lg-8 mx-auto">
-      <!-- Movie and Theater Info -->
-      <div class="card mb-4 shadow-sm">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center flex-wrap">
-            <div>
-              <h4 class="card-title font-weight-bold mb-1">{{ theater.movie.name }}</h4>
-              <p class="card-text text-muted mb-0">
-                {{ theater.name }} | {{ theater.date }} at {{ theater.time }}
-              </p>
-            </div>
-            <div class="mt-2 mt-sm-0">
-              <span class="badge bg-secondary me-2 p-2">2D</span>
-              <span class="badge bg-info text-dark p-2">{{ seats|length }} Total Seats</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Reservation Timer & Notification Banner -->
-      <div id="status-message-alert" class="alert alert-danger d-none mb-3 text-center" role="alert"></div>
-      
-      {% if error_message %}
-      <div class="alert alert-danger mb-3 text-center" role="alert">
-        {{ error_message }}
-      </div>
-      {% endif %}
-
-      <div id="reservation-timer-banner" class="alert alert-warning text-center d-none mb-4 shadow-sm" role="alert">
-        <i class="bi bi-clock-history me-1"></i>
-        <strong>Seats Temporarily Reserved!</strong>
-        <span> Complete payment in <span id="timer-countdown" class="badge bg-danger fs-6 ms-1">02:00</span></span>
-        <button type="button" id="btn-release" class="btn btn-sm btn-outline-danger ms-3">
-          Release / Change Seats
-        </button>
-      </div>
-
-      <!-- Seat Selection Grid -->
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h5 class="card-title text-center mb-3">Select Your Seats</h5>
-          <div class="screen mb-4">All eyes this way please!</div>
-
-          <form id="seat-booking-form" method="POST" action="{% url 'book_seats' theater.id %}">
-            {% csrf_token %}
-            <div id="seat-grid" class="d-flex justify-content-center flex-wrap mb-4">
-              {% for seat in seats %}
-              <div class="seat-container m-1">
-                <input
-                  type="checkbox"
-                  name="seats"
-                  value="{{ seat.id }}"
-                  class="d-none seat-checkbox"
-                  id="seat-{{ seat.id }}"
-                  data-seat-id="{{ seat.id }}"
-                  data-seat-number="{{ seat.seat_number }}"
-                />
-                <label
-                  for="seat-{{ seat.id }}"
-                  class="seat-box seat-available d-flex align-items-center justify-content-center"
-                  id="seat-box-{{ seat.id }}"
-                  title="Seat {{ seat.seat_number }}"
-                >
-                  {{ seat.seat_number }}
-                </label>
-              </div>
-              {% endfor %}
-            </div>
-
-            <!-- Seat Legend -->
-            <div class="d-flex justify-content-center flex-wrap mb-4 py-2 border-top border-bottom bg-light rounded">
-              <div class="d-flex align-items-center me-4 my-1">
-                <div class="seat-legend-box seat-available me-2"></div>
-                <span class="small fw-semibold">Available</span>
-              </div>
-              <div class="d-flex align-items-center me-4 my-1">
-                <div class="seat-legend-box seat-reserved-you me-2"></div>
-                <span class="small fw-semibold">Reserved by You</span>
-              </div>
-              <div class="d-flex align-items-center me-4 my-1">
-                <div class="seat-legend-box seat-reserved-other me-2"></div>
-                <span class="small fw-semibold">Reserved (Hold)</span>
-              </div>
-              <div class="d-flex align-items-center my-1">
-                <div class="seat-legend-box seat-sold me-2"></div>
-                <span class="small fw-semibold">Booked / Sold</span>
-              </div>
-            </div>
-
-            <!-- Action Buttons -->
-            <div class="text-center">
-              <button type="button" id="btn-reserve" class="btn btn-warning btn-lg me-2 text-dark font-weight-bold">
-                Hold Selected Seats (2 Mins)
-              </button>
-              <button type="submit" id="btn-book" class="btn btn-success btn-lg font-weight-bold">
-                Confirm & Pay
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <style>
-  .screen {
-    background: linear-gradient(180deg, #e0e0e0 0%, #cfcfcf 100%);
+  /* ── Layout ── */
+  .seat-page-wrapper { display: flex; gap: 1.5rem; align-items: flex-start; padding: 1.5rem 0; }
+  .seat-grid-col  { flex: 1 1 65%; min-width: 0; }
+  .summary-col    { flex: 0 0 300px; position: sticky; top: 80px; }
+
+  /* ── Screen Arc ── */
+  .screen-wrapper { text-align: center; margin-bottom: 1.5rem; }
+  .screen-arc {
+    display: inline-block;
+    width: 80%;
     height: 40px;
+    border-radius: 50% 50% 0 0 / 30px 30px 0 0;
+    background: linear-gradient(to bottom, #c8c8c8, #e8e8e8);
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.18);
     line-height: 40px;
-    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 3px;
     color: #555;
-    font-weight: 600;
-    letter-spacing: 1px;
-    border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    text-transform: uppercase;
   }
+
+  /* ── Row label ── */
+  .seat-row { display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
+  .row-label {
+    width: 24px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #888;
+    flex-shrink: 0;
+    text-align: center;
+  }
+  .row-seats { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
+
+  /* ── Row type separator ── */
+  .row-type-label {
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #888;
+    margin: 10px 0 4px;
+    position: relative;
+  }
+  .row-type-label::before,
+  .row-type-label::after {
+    content: '';
+    display: inline-block;
+    width: 60px;
+    height: 1px;
+    background: #ddd;
+    vertical-align: middle;
+    margin: 0 8px;
+  }
+
+  /* ── Seat box ── */
   .seat-box {
-    width: 38px;
-    height: 38px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: bold;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px 6px 4px 4px;
+    font-size: 11px;
+    font-weight: 700;
     cursor: pointer;
     user-select: none;
-    transition: all 0.2s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    position: relative;
   }
-  .seat-legend-box {
-    width: 22px;
-    height: 22px;
-    border-radius: 4px;
+  .seat-box:hover:not(.seat-sold):not(.seat-reserved-other) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
   }
-  
-  /* Seat Status Styles */
-  .seat-available {
-    background-color: #ffffff;
-    border: 2px solid #28a745;
-    color: #28a745;
+
+  /* Status colours */
+  .seat-available         { background:#fff; border:2px solid #28a745; color:#28a745; }
+  .seat-premium-available { background:#fff; border:2px solid #6f42c1; color:#6f42c1; }
+  .seat-selected-temp     { background:#20c997; border:2px solid #198754; color:#fff; }
+  .seat-premium-selected  { background:#8660cd; border:2px solid #6f42c1; color:#fff; }
+  .seat-reserved-you      { background:#0d6efd; border:2px solid #0a58ca; color:#fff; box-shadow:0 0 0 3px rgba(13,110,253,.35); }
+  .seat-reserved-other    { background:#ffc107; border:2px solid #e6a800; color:#212529; cursor:not-allowed; opacity:.85; }
+  .seat-sold              { background:#6c757d; border:2px solid #495057; color:#fff; cursor:not-allowed; opacity:.6; }
+
+  /* ── Legend ── */
+  .legend-grid { display:flex; flex-wrap:wrap; gap:10px 18px; justify-content:center; padding:10px 0; }
+  .legend-item { display:flex; align-items:center; gap:6px; font-size:0.78rem; font-weight:600; color:#444; }
+  .legend-dot  { width:20px; height:20px; border-radius:4px; flex-shrink:0; }
+
+  /* ── Summary panel ── */
+  .summary-card {
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    border: none;
+    overflow: hidden;
   }
-  .seat-available:hover {
-    background-color: #28a745;
-    color: #ffffff;
+  .summary-header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #fff;
+    padding: 14px 16px;
+    font-weight: 700;
+    font-size: 0.95rem;
   }
-  .seat-selected-temp {
-    background-color: #20c997;
-    border: 2px solid #198754;
-    color: #ffffff;
+  .seat-summary-list { list-style: none; padding: 0; margin: 0; }
+  .seat-summary-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.85rem;
   }
-  .seat-reserved-you {
-    background-color: #0d6efd;
-    border: 2px solid #0a58ca;
-    color: #ffffff;
-    box-shadow: 0 0 6px rgba(13, 110, 253, 0.5);
+  .seat-summary-list li:last-child { border-bottom: none; }
+  .seat-tag-premium { color: #6f42c1; font-weight: 700; font-size: 0.7rem; }
+  .seat-tag-standard { color: #28a745; font-weight: 700; font-size: 0.7rem; }
+  .summary-total {
+    background: #f8f9fa;
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    font-size: 1rem;
+    border-top: 2px solid #dee2e6;
   }
-  .seat-reserved-other {
-    background-color: #ffc107;
-    border: 2px solid #fd7e14;
-    color: #212529;
-    cursor: not-allowed;
-    opacity: 0.85;
+  .summary-empty { color: #aaa; font-size: 0.85rem; text-align: center; padding: 20px 16px; }
+
+  /* ── Timer banner ── */
+  #reservation-timer-banner {
+    border-radius: 10px;
+    font-size: 0.9rem;
+    transition: background-color 0.5s;
   }
-  .seat-sold {
-    background-color: #6c757d;
-    border: 2px solid #495057;
-    color: #ffffff;
-    cursor: not-allowed;
-    opacity: 0.7;
+  #reservation-timer-banner.urgent { background-color: #f8d7da !important; border-color: #dc3545 !important; color: #721c24; }
+  #timer-countdown { min-width: 52px; display: inline-block; text-align: center; }
+
+  /* ── Toast ── */
+  #toast-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .seat-toast {
+    min-width: 260px;
+    max-width: 360px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    animation: slideIn 0.25s ease;
+    color: #fff;
+  }
+  @keyframes slideIn { from { transform: translateX(120%); opacity:0; } to { transform: translateX(0); opacity:1; } }
+  .toast-success { background: #198754; }
+  .toast-danger  { background: #dc3545; }
+  .toast-warning { background: #856404; }
+  .toast-info    { background: #0d6efd; }
+
+  /* ── Buttons ── */
+  #btn-reserve { transition: all 0.2s; }
+  #btn-book:disabled { opacity: 0.5; cursor: not-allowed; }
+  .seat-count-badge { font-size: 1rem; }
+
+  @media (max-width: 768px) {
+    .seat-page-wrapper { flex-direction: column; }
+    .summary-col { flex: 1 1 100%; position: static; }
+    .screen-arc { width: 95%; }
   }
 </style>
 
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<div class="container-fluid mt-4 px-3 px-md-4">
+
+  <!-- Movie / Theater info bar -->
+  <div class="card mb-3 shadow-sm border-0" style="border-radius:10px; background:linear-gradient(135deg,#1a1a2e,#16213e); color:#fff;">
+    <div class="card-body py-3 px-4 d-flex justify-content-between align-items-center flex-wrap">
+      <div>
+        <h5 class="mb-0 font-weight-bold">{{ theater.movie.name }}</h5>
+        <small class="text-white-50">{{ theater.name }} &nbsp;|&nbsp; {{ theater.date }} at {{ theater.time }}</small>
+      </div>
+      <div class="mt-2 mt-sm-0">
+        <span class="badge badge-light mr-2 p-2" style="font-size:0.8rem;">2D</span>
+        <span class="badge p-2" style="background:#20c997; font-size:0.8rem;">{{ seats|length }} Seats</span>
+      </div>
+    </div>
+  </div>
+
+  {% if error_message %}
+  <div class="alert alert-danger text-center mb-3" role="alert">{{ error_message }}</div>
+  {% endif %}
+
+  <!-- Reservation Timer Banner -->
+  <div id="reservation-timer-banner" class="alert alert-warning text-center d-none mb-3 py-2" role="alert" style="border-radius:10px;">
+    <i class="bi bi-clock-history me-1"></i>
+    <strong>Seats Held!</strong>
+    Complete payment in
+    <span id="timer-countdown" class="badge bg-danger ml-1" style="font-size:0.95rem;">02:00</span>
+    <button type="button" id="btn-release" class="btn btn-sm btn-outline-danger ml-3">
+      <i class="bi bi-arrow-counterclockwise"></i> Change Seats
+    </button>
+  </div>
+
+  <!-- Main two-column layout -->
+  <div class="seat-page-wrapper">
+
+    <!-- ── Seat Grid Column ── -->
+    <div class="seat-grid-col">
+      <div class="card shadow-sm border-0" style="border-radius:12px;">
+        <div class="card-body p-3 p-md-4">
+
+          <!-- Screen -->
+          <div class="screen-wrapper">
+            <div class="screen-arc">&#x25BA;&nbsp; SCREEN &nbsp;&#x25C4;</div>
+            <div style="font-size:0.7rem; color:#aaa; margin-top:4px;">All eyes this way please!</div>
+          </div>
+
+          <!-- Seat Grid (built by JS) -->
+          <form id="seat-booking-form" method="POST" action="{% url 'book_seats' theater.id %}">
+            {% csrf_token %}
+            <div id="seat-grid"></div>
+          </form>
+
+          <!-- Legend -->
+          <div class="legend-grid mt-3 border-top pt-3">
+            <div class="legend-item"><div class="legend-dot" style="background:#fff;border:2px solid #28a745;"></div> Available</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#fff;border:2px solid #6f42c1;"></div> Premium</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#20c997;border:2px solid #198754;"></div> Selected</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#0d6efd;border:2px solid #0a58ca;"></div> Your Hold</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#ffc107;border:2px solid #e6a800;"></div> Reserved</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#6c757d;border:2px solid #495057;"></div> Booked</div>
+          </div>
+
+        </div>
+      </div>
+    </div><!-- /.seat-grid-col -->
+
+    <!-- ── Summary Panel Column ── -->
+    <div class="summary-col">
+      <div class="summary-card card">
+
+        <div class="summary-header">
+          <i class="bi bi-ticket-perforated-fill mr-2"></i> Booking Summary
+          <span id="seat-count-badge" class="badge badge-warning ml-2 seat-count-badge" style="display:none;"></span>
+        </div>
+
+        <div id="summary-body">
+          <p class="summary-empty">Select seats from the grid to see your booking summary.</p>
+        </div>
+
+        <div class="p-3">
+          <!-- Hold button -->
+          <button type="button" id="btn-reserve"
+            class="btn btn-warning btn-block font-weight-bold mb-2"
+            style="border-radius:8px;">
+            <i class="bi bi-lock-fill mr-1"></i> Hold Seats (2 min)
+          </button>
+
+          <!-- Pay button (disabled until HELD) -->
+          <button type="button" id="btn-book"
+            class="btn btn-success btn-block font-weight-bold"
+            style="border-radius:8px;"
+            disabled>
+            <i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay
+          </button>
+
+          <p id="hold-hint" class="text-muted text-center mt-2 mb-0" style="font-size:0.78rem;">
+            Hold your seats first, then confirm payment.
+          </p>
+        </div>
+
+      </div><!-- /.summary-card -->
+    </div><!-- /.summary-col -->
+
+  </div><!-- /.seat-page-wrapper -->
+</div>
+
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  const theaterId = {{ theater.id }};
-  const statusApiUrl = "{% url 'api_seat_status' theater.id %}";
-  const reserveApiUrl = "{% url 'reserve_seats' theater.id %}";
-  const releaseApiUrl = "{% url 'release_reservation' theater.id %}";
-  const bookForm = document.getElementById('seat-booking-form');
-  
-  const timerBanner = document.getElementById('reservation-timer-banner');
-  const timerCountdown = document.getElementById('timer-countdown');
-  const alertBox = document.getElementById('status-message-alert');
-  const btnReserve = document.getElementById('btn-reserve');
-  const btnRelease = document.getElementById('btn-release');
-  const btnBook = document.getElementById('btn-book');
+document.addEventListener('DOMContentLoaded', function () {
 
+  /* ─── Config ─── */
+  const theaterId      = {{ theater.id }};
+  const statusApiUrl   = "{% url 'api_seat_status' theater.id %}";
+  const reserveApiUrl  = "{% url 'reserve_seats' theater.id %}";
+  const releaseApiUrl  = "{% url 'release_reservation' theater.id %}";
+  const bookUrl        = "{% url 'book_seats' theater.id %}";
+  const csrfToken      = () => document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+  /* ─── State ─── */
+  let allSeats         = [];          // full seat list from last poll
+  let localSelected    = new Set();   // IDs the user has clicked but not yet held
+  let heldSeatIds      = new Set();   // IDs the server confirmed as HELD by this user
+  let heldSeatsData    = [];          // seat objects from server for HELD seats
+  let heldTotal        = 0;
   let remainingSeconds = 0;
-  let timerInterval = null;
-  let pollInterval = null;
-  let userReservedSeatIds = [];
+  let timerInterval    = null;
+  let pollInterval     = null;
+  let isHeld           = false;
 
-  function showAlert(msg, type = 'danger') {
-    alertBox.className = `alert alert-${type} mb-3 text-center`;
-    alertBox.textContent = msg;
-    alertBox.classList.remove('d-none');
-    setTimeout(() => {
-      alertBox.classList.add('d-none');
-    }, 5000);
+  /* ─── UI Refs ─── */
+  const timerBanner    = document.getElementById('reservation-timer-banner');
+  const timerCountdown = document.getElementById('timer-countdown');
+  const btnReserve     = document.getElementById('btn-reserve');
+  const btnRelease     = document.getElementById('btn-release');
+  const btnBook        = document.getElementById('btn-book');
+  const seatGrid       = document.getElementById('seat-grid');
+  const summaryBody    = document.getElementById('summary-body');
+  const seatCountBadge = document.getElementById('seat-count-badge');
+  const holdHint       = document.getElementById('hold-hint');
+
+  /* ─── Toast ─── */
+  function showToast(msg, type = 'danger') {
+    const t = document.createElement('div');
+    t.className = `seat-toast toast-${type}`;
+    t.textContent = msg;
+    document.getElementById('toast-container').appendChild(t);
+    setTimeout(() => t.remove(), 4500);
   }
 
-  function formatTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  /* ─── Timer ─── */
+  function formatTime(s) {
+    const m = Math.floor(s / 60), sec = s % 60;
+    return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
   }
 
   function startTimer(seconds) {
     clearInterval(timerInterval);
     remainingSeconds = seconds;
-    if (remainingSeconds <= 0) {
-      handleTimerExpiration();
-      return;
-    }
-    
-    timerBanner.classList.remove('d-none');
+    if (remainingSeconds <= 0) { onTimerExpired(); return; }
+
+    timerBanner.classList.remove('d-none', 'urgent');
     timerCountdown.textContent = formatTime(remainingSeconds);
 
     timerInterval = setInterval(() => {
       remainingSeconds--;
+      timerCountdown.textContent = formatTime(remainingSeconds);
+      if (remainingSeconds <= 30) {
+        timerBanner.classList.add('urgent');
+        timerCountdown.classList.remove('bg-danger');
+        timerCountdown.classList.add('bg-danger');
+      }
       if (remainingSeconds <= 0) {
         clearInterval(timerInterval);
-        handleTimerExpiration();
-      } else {
-        timerCountdown.textContent = formatTime(remainingSeconds);
+        onTimerExpired();
       }
     }, 1000);
   }
@@ -231,145 +358,320 @@ document.addEventListener('DOMContentLoaded', function() {
   function stopTimer() {
     clearInterval(timerInterval);
     timerBanner.classList.add('d-none');
+    timerBanner.classList.remove('urgent');
   }
 
-  function handleTimerExpiration() {
+  function onTimerExpired() {
     stopTimer();
-    userReservedSeatIds = [];
-    showAlert("Your 2-minute seat reservation has expired! Please select seats again.", "warning");
+    isHeld = false;
+    heldSeatIds.clear();
+    heldSeatsData = [];
+    heldTotal = 0;
+    localSelected.clear();
+    btnBook.disabled = true;
+    holdHint.textContent = 'Hold your seats first, then confirm payment.';
+    showToast('Your 2-minute seat hold has expired. Please select seats again.', 'warning');
     fetchSeatStatus();
   }
 
-  function updateSeatUI(seatsData, userReservation) {
-    userReservedSeatIds = userReservation ? userReservation.seat_ids : [];
+  /* ─── Build Seat Grid ─── */
+  function buildGrid(seats) {
+    // Sort: premium first, then standard; within each group sort by seat_number
+    const premium  = seats.filter(s => s.seat_type === 'premium')
+                          .sort((a,b) => a.seat_number.localeCompare(b.seat_number, undefined, {numeric:true}));
+    const standard = seats.filter(s => s.seat_type === 'standard')
+                          .sort((a,b) => a.seat_number.localeCompare(b.seat_number, undefined, {numeric:true}));
 
-    seatsData.forEach(seat => {
-      const checkbox = document.getElementById(`seat-${seat.id}`);
-      const label = document.getElementById(`seat-box-${seat.id}`);
-      if (!checkbox || !label) return;
+    seatGrid.innerHTML = '';
+    const COLS = 10;
 
-      label.className = 'seat-box d-flex align-items-center justify-content-center ';
+    function renderSection(list, label) {
+      if (!list.length) return;
+      const sep = document.createElement('div');
+      sep.className = 'row-type-label';
+      sep.textContent = label;
+      seatGrid.appendChild(sep);
 
-      if (seat.status === 'BOOKED') {
-        label.classList.add('seat-sold');
-        checkbox.disabled = true;
-        checkbox.checked = false;
-      } else if (seat.status === 'RESERVED') {
-        label.classList.add('seat-reserved-other');
-        checkbox.disabled = true;
-        checkbox.checked = false;
-        label.title = `Seat ${seat.seat_number} (Reserved by another user)`;
-      } else if (seat.status === 'RESERVED_BY_YOU') {
-        label.classList.add('seat-reserved-you');
-        checkbox.disabled = false;
-        checkbox.checked = true;
-        label.title = `Seat ${seat.seat_number} (Reserved by You)`;
-      } else {
-        checkbox.disabled = false;
-        if (checkbox.checked && !userReservedSeatIds.includes(seat.id)) {
-          label.classList.add('seat-selected-temp');
-        } else {
-          label.classList.add('seat-available');
-        }
-        label.title = `Seat ${seat.seat_number} (Available)`;
+      for (let r = 0; r < Math.ceil(list.length / COLS); r++) {
+        const rowEl = document.createElement('div');
+        rowEl.className = 'seat-row';
+
+        const rowLabel = document.createElement('span');
+        rowLabel.className = 'row-label';
+        rowLabel.textContent = String.fromCharCode(65 + r); // A, B, C …
+        rowEl.appendChild(rowLabel);
+
+        const rowSeats = document.createElement('div');
+        rowSeats.className = 'row-seats';
+
+        list.slice(r * COLS, (r + 1) * COLS).forEach(seat => {
+          const box = document.createElement('div');
+          box.id        = `seat-box-${seat.id}`;
+          box.className = `seat-box ${seatClass(seat)}`;
+          box.title     = seatTitle(seat);
+          box.dataset.seatId   = seat.id;
+          box.dataset.seatType = seat.seat_type;
+          box.dataset.price    = seat.price;
+          box.textContent      = seat.seat_number;
+
+          if (!isClickable(seat)) {
+            box.style.cursor = 'not-allowed';
+          } else {
+            box.addEventListener('click', () => onSeatClick(seat, box));
+          }
+          rowSeats.appendChild(box);
+        });
+
+        rowEl.appendChild(rowSeats);
+        seatGrid.appendChild(rowEl);
       }
-    });
-
-    if (userReservation && userReservation.remaining_seconds > 0) {
-      startTimer(userReservation.remaining_seconds);
-      btnBook.textContent = "Confirm & Pay (Reserved)";
-    } else {
-      stopTimer();
-      btnBook.textContent = "Confirm & Pay";
     }
+
+    renderSection(premium, 'Premium');
+    renderSection(standard, 'Standard');
   }
 
-  function fetchSeatStatus() {
-    fetch(statusApiUrl, {
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        updateSeatUI(data.seats, data.user_reservation);
-      }
-    })
-    .catch(err => console.error("Error fetching seat status:", err));
+  function seatClass(seat) {
+    if (seat.status === 'BOOKED') return 'seat-sold';
+    if (seat.status === 'RESERVED') return 'seat-reserved-other';
+    if (seat.status === 'RESERVED_BY_YOU') return 'seat-reserved-you';
+    // available
+    if (localSelected.has(seat.id)) {
+      return seat.seat_type === 'premium' ? 'seat-premium-selected' : 'seat-selected-temp';
+    }
+    return seat.seat_type === 'premium' ? 'seat-premium-available' : 'seat-available';
   }
 
-  document.querySelectorAll('.seat-checkbox').forEach(chk => {
-    chk.addEventListener('change', function() {
-      const label = document.getElementById(`seat-box-${this.value}`);
-      if (!label) return;
-      if (this.checked) {
-        label.classList.remove('seat-available');
-        label.classList.add('seat-selected-temp');
-      } else {
-        label.classList.remove('seat-selected-temp');
-        label.classList.add('seat-available');
-      }
-    });
-  });
+  function seatTitle(seat) {
+    const typeLabel = seat.seat_type === 'premium' ? 'Premium' : 'Standard';
+    const price     = `₹${seat.price.toFixed(2)}`;
+    if (seat.status === 'BOOKED')       return `Seat ${seat.seat_number} — Booked`;
+    if (seat.status === 'RESERVED')     return `Seat ${seat.seat_number} — Reserved by another user`;
+    if (seat.status === 'RESERVED_BY_YOU') return `Seat ${seat.seat_number} — Held by you (${price})`;
+    return `Seat ${seat.seat_number} | ${typeLabel} | ${price}`;
+  }
 
-  btnReserve.addEventListener('click', function() {
-    const selectedBoxes = Array.from(document.querySelectorAll('.seat-checkbox:checked'))
-                              .map(cb => parseInt(cb.value));
+  function isClickable(seat) {
+    return seat.status === 'AVAILABLE' || seat.status === 'RESERVED_BY_YOU';
+  }
 
-    if (selectedBoxes.length === 0) {
-      showAlert("Please select at least one seat to reserve.");
+  /* ─── Seat Click ─── */
+  function onSeatClick(seat, box) {
+    if (isHeld) {
+      showToast('You already have a hold. Click "Change Seats" to modify your selection.', 'info');
       return;
     }
+    if (seat.status === 'RESERVED_BY_YOU') return; // can't deselect held seat here
 
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    if (localSelected.has(seat.id)) {
+      localSelected.delete(seat.id);
+      box.className = `seat-box ${seat.seat_type === 'premium' ? 'seat-premium-available' : 'seat-available'}`;
+    } else {
+      localSelected.add(seat.id);
+      box.className = `seat-box ${seat.seat_type === 'premium' ? 'seat-premium-selected' : 'seat-selected-temp'}`;
+    }
+    updateSummaryPanel();
+  }
+
+  /* ─── Summary Panel ─── */
+  function updateSummaryPanel() {
+    const count = isHeld ? heldSeatIds.size : localSelected.size;
+
+    // Badge
+    if (count > 0) {
+      seatCountBadge.style.display = '';
+      seatCountBadge.textContent   = `${count} seat${count > 1 ? 's' : ''}`;
+    } else {
+      seatCountBadge.style.display = 'none';
+    }
+
+    if (isHeld && heldSeatsData.length) {
+      // Show held seats
+      let html = '<ul class="seat-summary-list">';
+      heldSeatsData.forEach(s => {
+        const tag = s.seat_type === 'premium'
+          ? `<span class="seat-tag-premium">PREMIUM</span>`
+          : `<span class="seat-tag-standard">STANDARD</span>`;
+        html += `<li>
+          <span>${tag} Seat <strong>${s.seat_number}</strong></span>
+          <span>₹${parseFloat(s.price).toFixed(2)}</span>
+        </li>`;
+      });
+      html += '</ul>';
+      html += `<div class="summary-total"><span>Total</span><span>₹${heldTotal.toFixed(2)}</span></div>`;
+      summaryBody.innerHTML = html;
+    } else if (!isHeld && localSelected.size > 0) {
+      // Show locally selected seats
+      const selectedSeats = allSeats.filter(s => localSelected.has(s.id));
+      const subtotal = selectedSeats.reduce((a, s) => a + s.price, 0);
+      let html = '<ul class="seat-summary-list">';
+      selectedSeats.forEach(s => {
+        const tag = s.seat_type === 'premium'
+          ? `<span class="seat-tag-premium">PREMIUM</span>`
+          : `<span class="seat-tag-standard">STANDARD</span>`;
+        html += `<li>
+          <span>${tag} Seat <strong>${s.seat_number}</strong></span>
+          <span>₹${s.price.toFixed(2)}</span>
+        </li>`;
+      });
+      html += '</ul>';
+      html += `<div class="summary-total"><span>Estimated Total</span><span>₹${subtotal.toFixed(2)}</span></div>`;
+      summaryBody.innerHTML = html;
+    } else {
+      summaryBody.innerHTML = '<p class="summary-empty">Select seats from the grid to see your booking summary.</p>';
+    }
+  }
+
+  /* ─── Poll Seat Status ─── */
+  function fetchSeatStatus() {
+    fetch(statusApiUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) return;
+        allSeats = data.seats;
+
+        const ur = data.user_reservation;
+        if (ur && ur.remaining_seconds > 0) {
+          isHeld = true;
+          heldSeatIds  = new Set(ur.seat_ids);
+          heldSeatsData = ur.seats || [];
+          heldTotal     = ur.total_price || 0;
+          localSelected.clear();
+
+          // Only restart timer if we haven't already started one
+          if (remainingSeconds <= 0 || Math.abs(remainingSeconds - ur.remaining_seconds) > 5) {
+            startTimer(ur.remaining_seconds);
+          }
+
+          btnBook.disabled = false;
+          btnReserve.disabled = true;
+          btnReserve.style.opacity = '0.5';
+          holdHint.textContent = 'Seats held! Click Confirm & Pay to complete your booking.';
+        } else if (!isHeld) {
+          // No server reservation and no local hold
+          heldSeatIds.clear();
+          heldSeatsData = [];
+          heldTotal = 0;
+          btnBook.disabled = true;
+          btnReserve.disabled = false;
+          btnReserve.style.opacity = '';
+          holdHint.textContent = 'Hold your seats first, then confirm payment.';
+        }
+
+        buildGrid(data.seats);
+        updateSummaryPanel();
+      })
+      .catch(err => console.error('Seat status error:', err));
+  }
+
+  /* ─── Reserve Button ─── */
+  btnReserve.addEventListener('click', function () {
+    const ids = Array.from(localSelected);
+    if (ids.length === 0) { showToast('Please select at least one seat first.', 'danger'); return; }
+
+    btnReserve.disabled = true;
+    btnReserve.innerHTML = '<span class="spinner-border spinner-border-sm mr-1"></span> Holding…';
 
     fetch(reserveApiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRFToken': csrfToken,
+        'X-CSRFToken': csrfToken(),
         'X-Requested-With': 'XMLHttpRequest'
       },
-      body: JSON.stringify({ seats: selectedBoxes })
+      body: JSON.stringify({ seats: ids })
     })
-    .then(res => res.json())
+    .then(r => r.json())
     .then(data => {
       if (data.success) {
-        showAlert(data.message, "success");
-        fetchSeatStatus();
+        isHeld = true;
+        showToast(`${ids.length} seat(s) held for 2 minutes. Complete payment now!`, 'success');
+        fetchSeatStatus();  // refresh immediately to get held seat details
       } else {
-        showAlert(data.error || "Failed to reserve seats.");
+        showToast(data.error || 'Failed to reserve seats.', 'danger');
+        btnReserve.disabled = false;
+        btnReserve.innerHTML = '<i class="bi bi-lock-fill mr-1"></i> Hold Seats (2 min)';
         fetchSeatStatus();
       }
     })
-    .catch(err => {
-      showAlert("Error reserving seats.");
-      console.error(err);
+    .catch(() => {
+      showToast('Network error. Please try again.', 'danger');
+      btnReserve.disabled = false;
+      btnReserve.innerHTML = '<i class="bi bi-lock-fill mr-1"></i> Hold Seats (2 min)';
     });
   });
 
-  btnRelease.addEventListener('click', function() {
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-
+  /* ─── Release Button ─── */
+  btnRelease.addEventListener('click', function () {
     fetch(releaseApiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': csrfToken,
-        'X-Requested-With': 'XMLHttpRequest'
-      }
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest' }
     })
-    .then(res => res.json())
+    .then(r => r.json())
     .then(data => {
       if (data.success) {
         stopTimer();
-        showAlert("Reservation cancelled. Seats released.", "info");
+        isHeld = false;
+        heldSeatIds.clear();
+        heldSeatsData = [];
+        heldTotal = 0;
+        localSelected.clear();
+        remainingSeconds = 0;
+        btnBook.disabled = true;
+        btnReserve.disabled = false;
+        btnReserve.style.opacity = '';
+        btnReserve.innerHTML = '<i class="bi bi-lock-fill mr-1"></i> Hold Seats (2 min)';
+        holdHint.textContent = 'Hold your seats first, then confirm payment.';
+        showToast('Hold released. You can now select different seats.', 'info');
         fetchSeatStatus();
       }
+    })
+    .catch(() => showToast('Network error releasing hold.', 'danger'));
+  });
+
+  /* ─── Confirm & Pay Button ─── */
+  btnBook.addEventListener('click', function () {
+    if (!isHeld || heldSeatIds.size === 0) {
+      showToast('Please hold seats before confirming payment.', 'warning');
+      return;
+    }
+
+    btnBook.disabled = true;
+    btnBook.innerHTML = '<span class="spinner-border spinner-border-sm mr-1"></span> Processing…';
+
+    fetch(bookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken(),
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify({ seats: Array.from(heldSeatIds) })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        stopTimer();
+        showToast(data.message || 'Booking confirmed! Redirecting…', 'success');
+        setTimeout(() => { window.location.href = data.redirect_url || '/user/profile/'; }, 1500);
+      } else {
+        showToast(data.error || 'Booking failed. Please try again.', 'danger');
+        btnBook.disabled = false;
+        btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
+        isHeld = false;
+        fetchSeatStatus();
+      }
+    })
+    .catch(() => {
+      showToast('Network error during booking. Please try again.', 'danger');
+      btnBook.disabled = false;
+      btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
     });
   });
 
+  /* ─── Start ─── */
   fetchSeatStatus();
   pollInterval = setInterval(fetchSeatStatus, 3000);
 });
 </script>
-{% endblock %}
+{% endblock %}

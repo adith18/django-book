@@ -151,9 +151,13 @@ def api_seat_status(request, theater_id):
         user_res = active_reservations.filter(user=request.user).first()
         if user_res:
             rem_sec = max(0, int((user_res.expires_at - timezone.now()).total_seconds()))
+            held_seats = list(user_res.seats.values('id', 'seat_number', 'seat_type', 'price'))
+            total = sum(float(s['price']) for s in held_seats)
             user_reservation_data = {
                 'id': user_res.id,
-                'seat_ids': list(user_res.seats.values_list('id', flat=True)),
+                'seat_ids': [s['id'] for s in held_seats],
+                'seats': held_seats,
+                'total_price': round(total, 2),
                 'remaining_seconds': rem_sec,
                 'expires_at': user_res.expires_at.isoformat(),
             }
@@ -173,6 +177,8 @@ def api_seat_status(request, theater_id):
         seat_list.append({
             'id': s.id,
             'seat_number': s.seat_number,
+            'seat_type': s.seat_type,
+            'price': float(s.price),
             'status': st,
         })
 
@@ -277,6 +283,38 @@ def release_reservation(request, theater_id):
 
 
 @login_required(login_url='login')
+def api_reservation_summary(request, theater_id):
+    """Return the current user's active HELD reservation details for the summary panel."""
+    theater = get_object_or_404(Theater, id=theater_id)
+    SeatReservation.cleanup_expired(theater=theater)
+
+    user_res = SeatReservation.objects.filter(
+        theater=theater,
+        user=request.user,
+        status='HELD',
+        expires_at__gt=timezone.now()
+    ).prefetch_related('seats').first()
+
+    if not user_res:
+        return JsonResponse({'success': True, 'reservation': None})
+
+    held_seats = list(user_res.seats.values('id', 'seat_number', 'seat_type', 'price'))
+    total = sum(float(s['price']) for s in held_seats)
+    rem_sec = max(0, int((user_res.expires_at - timezone.now()).total_seconds()))
+
+    return JsonResponse({
+        'success': True,
+        'reservation': {
+            'id': user_res.id,
+            'seats': held_seats,
+            'total_price': round(total, 2),
+            'remaining_seconds': rem_sec,
+            'expires_at': user_res.expires_at.isoformat(),
+        }
+    })
+
+
+@login_required(login_url='login')
 def book_seats(request, theater_id):
     theaters = get_object_or_404(Theater, id=theater_id)
     seats = Seat.objects.filter(theater=theaters)
@@ -312,6 +350,7 @@ def book_seats(request, theater_id):
             })
 
         booked_seat_numbers = []
+        total_order_price = 0
 
         try:
             with transaction.atomic():
@@ -345,20 +384,30 @@ def book_seats(request, theater_id):
                     expires_at__gt=timezone.now()
                 ).first()
 
+                if not user_res:
+                    raise ValueError("Your seat hold has expired. Please select and hold seats again before paying.")
+
+                # Verify held seats match the submitted seat ids
+                held_ids = set(user_res.seats.values_list('id', flat=True))
+                submitted_ids = set(selected_seat_ids)
+                if held_ids != submitted_ids:
+                    raise ValueError("Submitted seats do not match your held reservation. Please refresh and try again.")
+
                 for seat in locked_seats:
                     Booking.objects.create(
                         user=request.user,
                         seat=seat,
                         theater=theaters,
-                        movie=theaters.movie
+                        movie=theaters.movie,
+                        total_price=seat.price,
                     )
                     seat.is_booked = True
                     seat.save()
                     booked_seat_numbers.append(seat.seat_number)
+                    total_order_price += float(seat.price)
 
-                if user_res:
-                    user_res.status = 'COMPLETED'
-                    user_res.save(update_fields=['status'])
+                user_res.status = 'COMPLETED'
+                user_res.save(update_fields=['status'])
 
         except ValueError as e:
             error_msg = str(e)
@@ -380,7 +429,8 @@ def book_seats(request, theater_id):
                     f"Theater: {theaters.name}\n"
                     f"Date: {theaters.date}\n"
                     f"Time: {theaters.time}\n"
-                    f"Seats: {', '.join(booked_seat_numbers)}\n\n"
+                    f"Seats: {', '.join(booked_seat_numbers)}\n"
+                    f"Total Paid: ₹{total_order_price:.2f}\n\n"
                     f"Enjoy the show!"
                 ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -388,11 +438,11 @@ def book_seats(request, theater_id):
                 fail_silently=True,
             )
 
-        messages.success(request, 'Booking confirmed! A confirmation email has been sent.')
+        messages.success(request, f'Booking confirmed for {len(booked_seat_numbers)} seat(s)! A confirmation email has been sent.')
         if is_ajax:
             return JsonResponse({
                 'success': True,
-                'message': 'Booking confirmed!',
+                'message': f'Booking confirmed! Total: ₹{total_order_price:.2f}',
                 'redirect_url': '/user/profile/'
             })
 

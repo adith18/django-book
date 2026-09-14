@@ -51,14 +51,15 @@ class TheaterAdmin(admin.ModelAdmin):
 
 @admin.register(Seat)
 class SeatAdmin(admin.ModelAdmin):
-    list_display = ['seat_number', 'theater', 'is_booked']
-    list_filter = ['is_booked', 'theater']
+    list_display = ['seat_number', 'seat_type', 'price', 'theater', 'is_booked']
+    list_filter = ['is_booked', 'seat_type', 'theater']
     search_fields = ['seat_number', 'theater__name']
+    list_editable = ['seat_type', 'price']
 
 
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ['user', 'seat', 'theater', 'booked_at']
+    list_display = ['user', 'seat', 'theater', 'total_price', 'booked_at']
     list_filter = ['booked_at', 'theater']
     search_fields = ['user__username', 'user__email', 'theater__name']
 
