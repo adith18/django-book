@@ -43,9 +43,13 @@
                     </p>
                 </div>
                 <div class="card-footer bg-white border-top-0">
+                    {% if movie.end_date and movie.end_date < today %}
+                    <span class="btn btn-secondary btn-block disabled">Run ended</span>
+                    {% else %}
                     <a href="{% url 'theater_list' movie.id %}" class="btn btn-outline-primary btn-block">
-                        View Theaters <i class="fas fa-chevron-right ml-2"></i>
+                        Book Tickets <i class="fas fa-chevron-right ml-2"></i>
                     </a>
+                    {% endif %}
                 </div>
             </div>
         </div>

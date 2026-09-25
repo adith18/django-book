@@ -185,11 +185,14 @@
   <div class="card mb-3 shadow-sm border-0" style="border-radius:10px; background:linear-gradient(135deg,#1a1a2e,#16213e); color:#fff;">
     <div class="card-body py-3 px-4 d-flex justify-content-between align-items-center flex-wrap">
       <div>
-        <h5 class="mb-0 font-weight-bold">{{ theater.movie.name }}</h5>
-        <small class="text-white-50">{{ theater.name }} &nbsp;|&nbsp; {{ theater.date }} at {{ theater.time }}</small>
+        <h5 class="mb-0 font-weight-bold">{{ show_time.movie.name }}</h5>
+        <small class="text-white-50">
+          {{ show_time.theater.name }} &nbsp;|&nbsp; {{ show_time.screen.name }}
+          &nbsp;|&nbsp; {{ show_time.date|date:"M d, Y" }} at {{ show_time.start_time|time:"g:i A" }}
+        </small>
       </div>
       <div class="mt-2 mt-sm-0">
-        <span class="badge badge-light mr-2 p-2" style="font-size:0.8rem;">2D</span>
+        <span class="badge badge-light mr-2 p-2" style="font-size:0.8rem;">{{ show_time.screen.get_screen_type_display }}</span>
         <span class="badge p-2" style="background:#20c997; font-size:0.8rem;">{{ seats|length }} Seats</span>
       </div>
     </div>
@@ -225,7 +228,7 @@
           </div>
 
           <!-- Seat Grid (built by JS) -->
-          <form id="seat-booking-form" method="POST" action="{% url 'book_seats' theater.id %}">
+          <form id="seat-booking-form" method="POST" action="{% url 'book_seats' show_time.id %}">
             {% csrf_token %}
             <div id="seat-grid"></div>
           </form>
@@ -288,11 +291,11 @@
 document.addEventListener('DOMContentLoaded', function () {
 
   /* ─── Config ─── */
-  const theaterId      = {{ theater.id }};
-  const statusApiUrl   = "{% url 'api_seat_status' theater.id %}";
-  const reserveApiUrl  = "{% url 'reserve_seats' theater.id %}";
-  const releaseApiUrl  = "{% url 'release_reservation' theater.id %}";
-  const bookUrl        = "{% url 'book_seats' theater.id %}";
+  const showtimeId     = {{ show_time.id }};
+  const statusApiUrl   = "{% url 'api_seat_status' show_time.id %}";
+  const reserveApiUrl  = "{% url 'reserve_seats' show_time.id %}";
+  const releaseApiUrl  = "{% url 'release_reservation' show_time.id %}";
+  const bookUrl        = "{% url 'book_seats' show_time.id %}";
   const csrfToken      = () => document.querySelector('[name=csrfmiddlewaretoken]').value;
 
   /* ─── State ─── */

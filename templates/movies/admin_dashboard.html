@@ -71,8 +71,8 @@
     <div class="card-body">
       <div class="row">
         <div class="col-md-4 mb-2">
-          <a href="/admin/movies/movie/add/" class="btn btn-outline-primary btn-block text-left">
-            <i class="fas fa-plus-circle me-2"></i> Add New Movie
+          <a href="{% url 'admin_movie_schedule' %}" class="btn btn-outline-primary btn-block text-left">
+            <i class="fas fa-plus-circle me-2"></i> Add Movie &amp; Schedule Showtimes
           </a>
         </div>
         <div class="col-md-4 mb-2">
@@ -92,7 +92,7 @@
         </div>
         <div class="col-md-4 mb-2">
           <a href="/admin/movies/theater/add/" class="btn btn-outline-warning btn-block text-left text-dark">
-            <i class="fas fa-calendar-plus me-2"></i> Add Theater / Show Schedule
+            <i class="fas fa-building me-2"></i> Add Theater / Screen
           </a>
         </div>
         <div class="col-md-4 mb-2">
@@ -182,7 +182,7 @@
               <strong>{{ m.name }}</strong>
               <small class="text-muted d-block">{{ m.language.name|default:"No language" }} | {{ m.duration_display|default:"N/A" }}</small>
             </div>
-            <a href="/admin/movies/movie/{{ m.id }}/change/" class="btn btn-sm btn-outline-primary">Edit</a>
+            <a href="{% url 'admin_movie_schedule_edit' m.id %}" class="btn btn-sm btn-outline-primary">Schedule</a>
           </li>
           {% empty %}
           <li class="list-group-item text-muted">No movies added yet.</li>
@@ -197,13 +197,13 @@
           <i class="fas fa-clock me-2"></i> Scheduled Showtimes
         </div>
         <ul class="list-group list-group-flush">
-          {% for t in recent_theaters %}
+          {% for st in recent_showtimes %}
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <div>
-              <strong>{{ t.name }}</strong>
-              <small class="text-muted d-block">{{ t.movie.name }} on {{ t.date }} at {{ t.time }}</small>
+              <strong>{{ st.movie.name }}</strong>
+              <small class="text-muted d-block">{{ st.theater.name }} · {{ st.screen.name }} · {{ st.date|date:"M d, Y" }} {{ st.start_time|time:"g:i A" }}</small>
             </div>
-            <a href="/admin/movies/theater/{{ t.id }}/change/" class="btn btn-sm btn-outline-primary">Edit</a>
+            <a href="{% url 'admin_movie_schedule_edit' st.movie_id %}" class="btn btn-sm btn-outline-primary">Edit</a>
           </li>
           {% empty %}
           <li class="list-group-item text-muted">No showtimes scheduled.</li>

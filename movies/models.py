@@ -1,4 +1,5 @@
 import re
+import datetime
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -100,7 +101,18 @@ class Movie(models.Model):
     )
     age_certification = models.CharField(max_length=10, choices=AGE_CERTIFICATIONS, blank=True)
     duration_minutes = models.PositiveIntegerField(blank=True, null=True, help_text='Runtime in minutes')
-    release_date = models.DateField(blank=True, null=True)
+    release_date = models.DateField(
+        blank=True, null=True,
+        help_text='Available from (first bookable day, inclusive)',
+    )
+    end_date = models.DateField(
+        blank=True, null=True,
+        help_text='Available until (last bookable day, inclusive)',
+    )
+    default_cleaning_buffer_minutes = models.PositiveIntegerField(
+        default=30,
+        help_text='Default buffer/cleaning time between shows (minutes) for new showtimes',
+    )
     created_at = models.DateTimeField(default=timezone.now, editable=False)
 
     class Meta:
@@ -112,6 +124,8 @@ class Movie(models.Model):
     def clean(self):
         super().clean()
         validate_youtube_url(self.trailer_url)
+        if self.release_date and self.end_date and self.end_date < self.release_date:
+            raise ValidationError({'end_date': 'End date must be on or after the release date.'})
 
     @property
     def trailer_embed_url(self):
@@ -143,6 +157,38 @@ class Movie(models.Model):
     def ordered_cast(self):
         return self.movie_cast.select_related('cast_member').order_by('order')
 
+    @property
+    def is_active(self):
+        """True when today falls within the movie's theatrical run."""
+        today = timezone.localdate()
+        if self.release_date and today < self.release_date:
+            return False
+        if self.end_date and today > self.end_date:
+            return False
+        return True
+
+    @property
+    def run_ended(self):
+        """True when the theatrical run has passed."""
+        if self.end_date:
+            return timezone.localdate() > self.end_date
+        return False
+
+    def get_booking_dates(self):
+        """Return list of dates from release_date to end_date (future-only window)."""
+        today = timezone.localdate()
+        start = self.release_date or today
+        end = self.end_date or today
+        if end < today:
+            return []
+        start = max(start, today)
+        dates = []
+        current = start
+        while current <= end:
+            dates.append(current)
+            current += datetime.timedelta(days=1)
+        return dates
+
 
 class MovieCast(models.Model):
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='movie_cast')
@@ -173,31 +219,195 @@ class MoviePoster(models.Model):
 
 
 class Theater(models.Model):
-    """Represents a single scheduled screening (show) of a movie at a venue/screen."""
+    """Represents a physical cinema venue/location."""
     name = models.CharField(max_length=250)
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='theaters')
-    date = models.DateField(default=timezone.localdate, help_text='Show date')
-    time = models.TimeField()
 
     class Meta:
-        ordering = ['date', 'time']
+        ordering = ['name']
 
     def __str__(self):
-        return f'{self.name} - {self.movie.name} on {self.date} at {self.time}'
+        return self.name
+
+
+class Screen(models.Model):
+    """A physical screen/auditorium inside a Theater venue."""
+    SCREEN_TYPE_CHOICES = [
+        ('standard', 'Standard'),
+        ('imax', 'IMAX'),
+        ('3d', '3D'),
+        ('4dx', '4DX'),
+        ('dolby', 'Dolby Atmos'),
+    ]
+
+    theater = models.ForeignKey(Theater, on_delete=models.CASCADE, related_name='screens')
+    name = models.CharField(max_length=100, help_text='e.g. Screen 1, IMAX Hall')
+    total_seats = models.PositiveIntegerField(default=100)
+    screen_type = models.CharField(max_length=20, choices=SCREEN_TYPE_CHOICES, default='standard')
+
+    class Meta:
+        ordering = ['theater', 'name']
+        unique_together = ('theater', 'name')
+
+    def __str__(self):
+        return f'{self.theater.name} — {self.name}'
+
+
+class ShowTime(models.Model):
+    """A single scheduled screening: movie + theater + screen + date + start time."""
+
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='showtimes')
+    theater = models.ForeignKey(Theater, on_delete=models.CASCADE, related_name='showtimes')
+    screen = models.ForeignKey(Screen, on_delete=models.CASCADE, related_name='showtimes')
+    date = models.DateField(help_text='Screening date')
+    start_time = models.TimeField(help_text='Show start time')
+    cleaning_buffer_minutes = models.PositiveIntegerField(
+        default=20,
+        help_text='Buffer time after show ends before next show can start (minutes)'
+    )
+    is_cancelled = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['date', 'start_time']
+        unique_together = ('screen', 'date', 'start_time')
+
+    def __str__(self):
+        return f'{self.movie.name} @ {self.theater.name}/{self.screen.name} on {self.date} at {self.start_time}'
+
+    def save(self, *args, **kwargs):
+        if self.screen_id:
+            self.theater_id = self.screen.theater_id
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def duration_minutes(self):
+        return self.movie.duration_minutes or 120
+
+    @property
+    def end_time(self):
+        """Calculate end time including movie duration + cleaning buffer."""
+        start_dt = datetime.datetime.combine(self.date, self.start_time)
+        end_dt = start_dt + datetime.timedelta(minutes=self.duration_minutes + self.cleaning_buffer_minutes)
+        return end_dt.time()
+
+    @property
+    def end_time_display(self):
+        """End time without buffer (actual movie end)."""
+        start_dt = datetime.datetime.combine(self.date, self.start_time)
+        end_dt = start_dt + datetime.timedelta(minutes=self.duration_minutes)
+        return end_dt.time()
 
     @property
     def starts_at(self):
-        dt = timezone.datetime.combine(self.date, self.time)
+        """Timezone-aware datetime of the show start."""
+        dt = datetime.datetime.combine(self.date, self.start_time)
         if timezone.is_naive(dt):
             return timezone.make_aware(dt)
         return dt
 
     @property
     def has_started(self):
+        """True once the show start time has passed."""
         try:
             return self.starts_at <= timezone.now()
         except Exception:
             return False
+
+    def _occupied_seat_ids(self):
+        """Seat IDs booked or actively held for this showtime."""
+        booked = set(
+            Booking.objects.filter(show_time=self).values_list('seat_id', flat=True)
+        )
+        now = timezone.now()
+        held_reservations = SeatReservation.objects.filter(
+            show_time=self,
+            status='HELD',
+            expires_at__gt=now,
+        ).prefetch_related('seats')
+        for reservation in held_reservations:
+            booked.update(reservation.seats.values_list('id', flat=True))
+        return booked
+
+    @property
+    def booking_status(self):
+        """Returns one of: Available, Almost Full, Sold Out, Closed, Cancelled."""
+        if self.is_cancelled:
+            return 'Cancelled'
+        if self.has_started:
+            return 'Closed'
+        total = self.seats_total
+        if total == 0:
+            return 'Available'
+        occupied = len(self._occupied_seat_ids())
+        ratio = occupied / total
+        if ratio >= 1.0:
+            return 'Sold Out'
+        elif ratio >= 0.8:
+            return 'Almost Full'
+        return 'Available'
+
+    @property
+    def customer_status_label(self):
+        """Label shown on the public booking page."""
+        status = self.booking_status
+        if status == 'Available':
+            return 'Book Now'
+        return status
+
+    @property
+    def seats_available(self):
+        return max(0, self.seats_total - len(self._occupied_seat_ids()))
+
+    @property
+    def seats_total(self):
+        if not self.screen_id:
+            return 0
+        count = self.screen.seats.count()
+        if count:
+            return count
+        return self.screen.total_seats or 0
+
+    def clean(self):
+        """Prevent overlapping shows on the same screen on the same date."""
+        super().clean()
+        if self.screen_id:
+            self.theater = self.screen.theater
+        if self.screen_id and self.theater_id and self.screen.theater_id != self.theater_id:
+            raise ValidationError({'screen': 'Selected screen does not belong to the chosen theater.'})
+        if self.movie_id and self.date:
+            movie = self.movie
+            if movie.release_date and self.date < movie.release_date:
+                raise ValidationError({
+                    'date': f'Show date cannot be before the movie\'s available-from date ({movie.release_date}).',
+                })
+            if movie.end_date and self.date > movie.end_date:
+                raise ValidationError({
+                    'date': f'Show date cannot be after the movie\'s available-until date ({movie.end_date}).',
+                })
+        if not self.screen_id or not self.date or not self.start_time:
+            return
+
+        duration = self.duration_minutes
+        buffer = self.cleaning_buffer_minutes
+        my_start = datetime.datetime.combine(self.date, self.start_time)
+        my_end = my_start + datetime.timedelta(minutes=duration + buffer)
+
+        conflicts = ShowTime.objects.filter(
+            screen=self.screen,
+            date=self.date,
+            is_cancelled=False,
+        ).exclude(pk=self.pk)
+
+        for other in conflicts:
+            other_start = datetime.datetime.combine(other.date, other.start_time)
+            other_end = other_start + datetime.timedelta(
+                minutes=(other.movie.duration_minutes or 120) + other.cleaning_buffer_minutes
+            )
+            if my_start < other_end and my_end > other_start:
+                raise ValidationError(
+                    f'This show overlaps with "{other.movie.name}" on {self.screen} '
+                    f'({other.start_time.strftime("%I:%M %p")} – {other_end.strftime("%I:%M %p")}).'
+                )
 
 
 class Seat(models.Model):
@@ -206,14 +416,18 @@ class Seat(models.Model):
         ('premium', 'Premium'),
     ]
 
-    theater = models.ForeignKey(Theater, on_delete=models.CASCADE, related_name='seats')
+    screen = models.ForeignKey(Screen, on_delete=models.CASCADE, related_name='seats', null=True, blank=True)
     seat_number = models.CharField(max_length=10)
-    is_booked = models.BooleanField(default=False)
     seat_type = models.CharField(max_length=10, choices=SEAT_TYPE_CHOICES, default='standard')
     price = models.DecimalField(max_digits=8, decimal_places=2, default=150.00)
+    # is_booked tracks permanent bookings per show; for dynamic status use ShowTime.booking_status
+    is_booked = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['seat_number']
 
     def __str__(self):
-        return f'Seat {self.seat_number} ({self.get_seat_type_display()}) in {self.theater.name}'
+        return f'Seat {self.seat_number} ({self.get_seat_type_display()}) in {self.screen}'
 
 
 class SeatReservation(models.Model):
@@ -225,7 +439,7 @@ class SeatReservation(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='seat_reservations')
-    theater = models.ForeignKey(Theater, on_delete=models.CASCADE, related_name='seat_reservations')
+    show_time = models.ForeignKey(ShowTime, on_delete=models.CASCADE, related_name='seat_reservations', null=True, blank=True)
     seats = models.ManyToManyField(Seat, related_name='reservations')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='HELD')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -243,33 +457,33 @@ class SeatReservation(models.Model):
             self.save(update_fields=['status'])
 
     @classmethod
-    def cleanup_expired(cls, theater=None):
+    def cleanup_expired(cls, show_time=None):
         """Mark past held reservations as EXPIRED."""
         now = timezone.now()
         qs = cls.objects.filter(status='HELD', expires_at__lte=now)
-        if theater:
-            qs = qs.filter(theater=theater)
+        if show_time:
+            qs = qs.filter(show_time=show_time)
         return qs.update(status='EXPIRED')
 
     def __str__(self):
-        return f"Reservation #{self.id} by {self.user.username} for {self.theater.name}"
-
+        return f"Reservation #{self.id} by {self.user.username} for {self.show_time}"
 
 
 class Booking(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    seat = models.OneToOneField(Seat, on_delete=models.CASCADE)
-    theater = models.ForeignKey(Theater, on_delete=models.CASCADE)
+    seat = models.ForeignKey(Seat, on_delete=models.CASCADE, null=True, blank=True)
+    show_time = models.ForeignKey(ShowTime, on_delete=models.CASCADE, related_name='bookings', null=True, blank=True)
+    theater = models.ForeignKey(Theater, on_delete=models.CASCADE, null=True, blank=True)
     booked_at = models.DateTimeField(auto_now_add=True)
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE, null=True, blank=True)
     total_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
-        return f'Booking by {self.user.username} for {self.seat.seat_number} at {self.theater.name}'
+        return f'Booking by {self.user.username} for {self.seat.seat_number} at {self.show_time}'
 
     @property
     def has_been_watched(self):
-        return self.theater.has_started
+        return self.show_time.has_started
 
 
 def user_has_watched_movie(user, movie):
@@ -278,7 +492,7 @@ def user_has_watched_movie(user, movie):
     if not user or not getattr(user, 'is_authenticated', False):
         return False
     return Booking.objects.filter(
-        user=user, movie=movie, theater__date__lte=timezone.localdate()
+        user=user, movie=movie, show_time__date__lte=timezone.localdate()
     ).exists()
 
 

@@ -95,7 +95,8 @@ else:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-    DATABASES['default'] = dj_database_url.parse('postgresql://django_booking_3liz_user:qCjC0O4b0vNHt24Xyt5jr15hozQAPyki@dpg-da4a9qn40ujc73d68l50-a.oregon-postgres.render.com/django_booking_3liz')
+    # DATABASES['default'] = dj_database_url.parse('postgresql://django_booking_3liz_user:qCjC0O4b0vNHt24Xyt5jr15hozQAPyki@dpg-da4a9qn40ujc73d68l50-a.oregon-postgres.render.com/django_booking_3liz')
+    # NOTE: Uncomment above and comment SQLite block to use Render.com PostgreSQL in production
 
 
 # Password validation
