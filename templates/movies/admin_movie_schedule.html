@@ -10,9 +10,33 @@
   .show-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding:10px 16px; border-top:1px solid #eee; }
   .show-row:nth-child(even) { background:#fafafa; }
   .add-show-bar { padding:12px 16px; background:#f0f7ff; border-top:1px dashed #b6d4fe; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-  .copy-bar { padding:10px 16px; background:#fff8e6; border-top:1px solid #ffe69c; font-size:13px; }
+  .copy-bar { padding:10px 16px; background:#fff8e6; border-top:1px solid #ffe69c; font-size:13px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .sticky-actions { position:sticky; top:70px; }
-  @media (max-width:768px) { .add-show-bar input, .add-show-bar select { width:100% !important; } }
+
+  /* End-time preview badge */
+  .endtime-preview {
+    display:inline-block;
+    background:#d1e7dd;
+    color:#0a3622;
+    border-radius:6px;
+    padding:2px 10px;
+    font-size:.8rem;
+    font-weight:700;
+    min-width:110px;
+    text-align:center;
+  }
+  .endtime-preview.unknown { background:#e9ecef; color:#888; }
+
+  /* Edit modal */
+  .modal-header { background:linear-gradient(135deg,#1a1a2e,#16213e); color:#fff; border-radius:8px 8px 0 0; }
+  .modal-header .close { color:#fff; opacity:.8; }
+  .modal-header .btn-close { filter:invert(1); }
+
+  @media (max-width:768px) {
+    .add-show-bar { flex-direction:column; align-items:stretch; }
+    .add-show-bar input, .add-show-bar select { width:100% !important; }
+    .copy-bar { flex-direction:column; }
+  }
 </style>
 
 <div class="container py-4">
@@ -31,6 +55,7 @@
   {% endif %}
 
   <div class="row">
+    <!-- ── LEFT: Movie form ── -->
     <div class="col-lg-4 mb-4">
       <div class="schedule-card sticky-actions">
         <h5>Movie &amp; availability</h5>
@@ -47,12 +72,27 @@
             {{ form.name }}
             {{ form.name.errors }}
           </div>
+
+          <div class="form-group mb-2">
+            <label>Description</label>
+            {{ form.description }}
+            {{ form.description.errors }}
+          </div>
+
           <div class="form-group mb-2">
             <label>Poster image {% if not movie %}*{% endif %}</label>
+            {% if movie and movie.image %}
+            <div class="mb-1">
+              <img src="{{ movie.image.url }}" alt="Current poster"
+                   style="width:80px; height:110px; object-fit:cover; border-radius:6px; border:2px solid #dee2e6;">
+              <small class="d-block text-muted mt-1">Current poster — upload a new one to replace</small>
+            </div>
+            {% endif %}
             {{ form.image }}
             {{ form.image.errors }}
           </div>
-          <div class="form-row">
+
+          <div class="form-row row g-2">
             <div class="col-6 form-group mb-2">
               <label>Duration (hours)</label>
               {{ form.duration_hours }}
@@ -62,6 +102,7 @@
               {{ form.duration_mins }}
             </div>
           </div>
+
           <div class="form-group mb-2">
             <label>Available from *</label>
             {{ form.release_date }}
@@ -75,6 +116,52 @@
           <div class="form-group mb-2">
             <label>Default buffer / cleaning (minutes)</label>
             {{ form.default_cleaning_buffer_minutes }}
+            <small class="form-text text-muted">Time between shows on the same screen.</small>
+          </div>
+
+          <hr class="my-2">
+          <p class="small text-muted mb-2 fw-semibold">Additional movie details</p>
+
+          <div class="form-group mb-2">
+            <label>Language</label>
+            {{ form.language }}
+            {{ form.language.errors }}
+          </div>
+
+          <div class="form-group mb-2">
+            <label>Age certification</label>
+            {{ form.age_certification }}
+            {{ form.age_certification.errors }}
+          </div>
+
+          <div class="form-group mb-2">
+            <label>Critic / base rating <span class="text-muted fw-normal">(out of 10)</span></label>
+            {{ form.rating }}
+            {{ form.rating.errors }}
+          </div>
+
+          <div class="form-group mb-2">
+            <label>YouTube trailer URL</label>
+            {{ form.trailer_url }}
+            {{ form.trailer_url.errors }}
+            {% if movie and movie.trailer_embed_url %}
+            <small class="text-success d-block mt-1">
+              <i class="fas fa-check-circle me-1"></i>Trailer linked
+              <a href="{{ movie.trailer_url }}" target="_blank" class="ms-2">Preview ↗</a>
+            </small>
+            {% endif %}
+          </div>
+
+          <div class="form-group mb-3">
+            <label class="d-block fw-semibold mb-1">Genres</label>
+            <div style="max-height:140px; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; padding:8px 12px; background:#fff;">
+              {% if form.genres %}
+              {{ form.genres }}
+              {% else %}
+              <small class="text-muted">No genres available — <a href="/admin/movies/genre/add/" target="_blank">Add genres</a></small>
+              {% endif %}
+            </div>
+            {{ form.genres.errors }}
           </div>
 
           <hr>
@@ -95,7 +182,7 @@
             </select>
           </div>
 
-          <button type="submit" class="btn btn-primary btn-block">
+          <button type="submit" class="btn btn-primary btn-block w-100">
             <i class="fas fa-save me-1"></i> Save movie details
           </button>
         </form>
@@ -105,6 +192,7 @@
       </div>
     </div>
 
+    <!-- ── RIGHT: Schedule ── -->
     <div class="col-lg-8">
       <div class="schedule-card">
         <h5>Showtime schedule</h5>
@@ -113,7 +201,11 @@
         {% elif not schedule_dates %}
         <p class="text-muted">Set available from/until dates and save to generate the date list.</p>
         {% else %}
-        <p class="small text-muted">Each date can have its own times. End times are calculated from duration + buffer. Overlaps are blocked.</p>
+        <p class="small text-muted">
+          Each date can have its own times.
+          End times are calculated automatically from <strong>duration + buffer</strong>.
+          Overlapping shows on the same screen are blocked.
+        </p>
         <div id="scheduleAlerts"></div>
         <div id="scheduleContainer"></div>
         {% endif %}
@@ -122,14 +214,47 @@
   </div>
 </div>
 
+<!-- ══ Edit Showtime Modal ══ -->
 {% if movie %}
+<div class="modal fade" id="editShowModal" tabindex="-1" aria-labelledby="editShowModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:10px;overflow:hidden;">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editShowModalLabel"><i class="fas fa-edit me-2"></i>Edit Showtime</h5>
+        <button type="button" class="btn-close btn-close-white" data-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editShowId">
+        <div class="form-group mb-3">
+          <label class="font-weight-bold">Start Time (24-hour)</label>
+          <input type="time" id="editStartTime" class="form-control form-control-lg">
+        </div>
+        <div class="form-group mb-3">
+          <label class="font-weight-bold">Buffer / Cleaning Time (minutes)</label>
+          <input type="number" id="editBuffer" class="form-control" min="0" max="120" step="5">
+        </div>
+        <div class="alert alert-info py-2 mb-0" id="editEndPreview" style="font-size:.9rem;">
+          <i class="fas fa-clock me-1"></i> End time preview: <strong id="editEndPreviewVal">—</strong>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnSaveEdit">
+          <i class="fas fa-save me-1"></i> Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {{ showtimes_by_date_json|json_script:"admin-showtimes-data" }}
 <script>
 (function () {
-  const MOVIE_ID = {{ movie.id }};
+  const MOVIE_ID      = {{ movie.id }};
+  const MOVIE_DURATION = {{ movie.duration_minutes|default:120 }};
   const DEFAULT_BUFFER = {{ movie.default_cleaning_buffer_minutes|default:30 }};
-  const AVAIL_FROM = "{{ movie.release_date|date:'Y-m-d' }}";
-  const AVAIL_UNTIL = "{{ movie.end_date|date:'Y-m-d' }}";
+  const AVAIL_FROM    = "{{ movie.release_date|date:'Y-m-d' }}";
+  const AVAIL_UNTIL   = "{{ movie.end_date|date:'Y-m-d' }}";
   const SCHEDULE_DATES = [
     {% for d in schedule_dates %}"{{ d|date:'Y-m-d' }}"{% if not forloop.last %},{% endif %}
     {% endfor %}
@@ -139,17 +264,18 @@
   const dataEl = document.getElementById('admin-showtimes-data');
   if (dataEl) showtimesByDate = JSON.parse(dataEl.textContent);
 
-  const addUrl = "{% url 'admin_api_showtime_add' movie.id %}";
-  const copyUrl = "{% url 'admin_api_copy_schedule' movie.id %}";
+  const addUrl    = "{% url 'admin_api_showtime_add' movie.id %}";
+  const copyUrl   = "{% url 'admin_api_copy_schedule' movie.id %}";
   const screensUrl = "{% url 'admin_api_screens' %}";
   const csrf = () => document.querySelector('[name=csrfmiddlewaretoken]').value;
 
   const defaultTheater = document.getElementById('defaultTheater');
-  const defaultScreen = document.getElementById('defaultScreen');
+  const defaultScreen  = document.getElementById('defaultScreen');
 
   defaultTheater.addEventListener('change', loadScreens);
   loadScreens();
 
+  // ── Screen loader ──
   function loadScreens() {
     const tid = defaultTheater.value;
     defaultScreen.innerHTML = '<option value="">— Select screen —</option>';
@@ -167,65 +293,159 @@
       });
   }
 
+  // ── Alert helper ──
   function alertMsg(html, type) {
     const box = document.getElementById('scheduleAlerts');
     box.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show">${html}
       <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button></div>`;
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
+  // ── End-time calculator (client-side preview) ──
+  function calcEndTime(startHHMM, durationMins, bufferMins) {
+    if (!startHHMM) return null;
+    const [h, m] = startHHMM.split(':').map(Number);
+    const totalMins = h * 60 + m + durationMins + bufferMins;
+    const endH = Math.floor(totalMins / 60) % 24;
+    const endM = totalMins % 60;
+    return `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
+  }
+
+  function fmt12(hhmm) {
+    if (!hhmm) return '—';
+    const [h, m] = hhmm.split(':').map(Number);
+    const ampm = h < 12 ? 'AM' : 'PM';
+    const h12 = h % 12 || 12;
+    return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
+  }
+
+  function calcMovieEnd(startHHMM, durationMins) {
+    if (!startHHMM) return null;
+    const [h, m] = startHHMM.split(':').map(Number);
+    const totalMins = h * 60 + m + durationMins;
+    const endH = Math.floor(totalMins / 60) % 24;
+    const endM = totalMins % 60;
+    return `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
+  }
+
+  // ── Render schedule ──
   function render() {
     const container = document.getElementById('scheduleContainer');
     if (!container) return;
     let html = '';
     SCHEDULE_DATES.forEach(dateStr => {
       const shows = showtimesByDate[dateStr] || [];
-      const label = new Date(dateStr + 'T12:00:00').toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric' });
+      const label = new Date(dateStr + 'T12:00:00').toLocaleDateString(undefined, { weekday:'short', day:'numeric', month:'short', year:'numeric' });
       html += `<div class="date-block" data-date="${dateStr}">
         <div class="date-block-header">
           <span><i class="fas fa-calendar-day me-1 text-primary"></i> ${label}</span>
-          <span class="badge badge-secondary">${shows.length} show(s)</span>
+          <span class="badge badge-${shows.length ? 'primary' : 'secondary'}">${shows.length} show${shows.length !== 1 ? 's' : ''}</span>
         </div>`;
+
       shows.forEach(st => {
         html += `<div class="show-row" data-show-id="${st.id}">
-          <div><strong>${st.time_range}</strong>
+          <div>
+            <strong>${st.time_range}</strong>
             <small class="text-muted d-block">${st.theater_name} · ${st.screen_name} · buffer ${st.cleaning_buffer_minutes}m</small>
           </div>
           <div>
-            <button type="button" class="btn btn-sm btn-outline-primary btn-edit" data-id="${st.id}" data-date="${st.date}" data-time="${st.start_time}" data-buffer="${st.cleaning_buffer_minutes}">Edit</button>
-            <button type="button" class="btn btn-sm btn-outline-danger btn-delete" data-id="${st.id}">Delete</button>
+            <button type="button" class="btn btn-sm btn-outline-primary btn-edit"
+              data-id="${st.id}"
+              data-date="${st.date}"
+              data-time="${st.start_time}"
+              data-buffer="${st.cleaning_buffer_minutes}">
+              <i class="fas fa-pencil-alt me-1"></i>Edit
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-delete ml-1" data-id="${st.id}">
+              <i class="fas fa-trash me-1"></i>Delete
+            </button>
           </div>
         </div>`;
       });
+
+      // Add-show bar
+      const defaultTime = shows.length > 0
+        ? (() => {
+            const last = shows[shows.length - 1];
+            return calcEndTime(last.start_time, MOVIE_DURATION, last.cleaning_buffer_minutes || DEFAULT_BUFFER) || '10:00';
+          })()
+        : '10:00';
+
       html += `<div class="add-show-bar">
-        <label class="mb-0 small">Start:</label>
-        <input type="time" class="form-control form-control-sm add-time" style="width:auto;" value="10:00">
-        <button type="button" class="btn btn-sm btn-success btn-add-show" data-date="${dateStr}"><i class="fas fa-plus"></i> Add show</button>
+        <label class="mb-0 small font-weight-bold">Start:</label>
+        <input type="time" class="form-control form-control-sm add-time" style="width:auto;" value="${defaultTime}">
+        <span class="endtime-preview unknown add-end-preview" title="Predicted end time (movie only, no buffer)">End: —</span>
+        <button type="button" class="btn btn-sm btn-success btn-add-show" data-date="${dateStr}">
+          <i class="fas fa-plus me-1"></i>Add show
+        </button>
       </div>
       <div class="copy-bar">
-        Copy this date's schedule to:
+        <i class="fas fa-copy text-warning me-1"></i>
+        <span>Copy this date's schedule to:</span>
         <input type="date" class="form-control form-control-sm d-inline-block copy-target" style="width:auto;" min="${AVAIL_FROM}" max="${AVAIL_UNTIL}">
         <button type="button" class="btn btn-sm btn-warning btn-copy" data-source="${dateStr}">Copy schedule</button>
       </div></div>`;
     });
+
     container.innerHTML = html;
     bindEvents();
+    updateAllEndPreviews();
   }
 
+  // ── Wire up all events after render ──
   function bindEvents() {
+    // Add-show button
     document.querySelectorAll('.btn-add-show').forEach(btn => {
-      btn.onclick = () => addShow(btn.dataset.date, btn.closest('.add-show-bar').querySelector('.add-time').value);
+      btn.onclick = () => {
+        const bar = btn.closest('.add-show-bar');
+        addShow(btn.dataset.date, bar.querySelector('.add-time').value);
+      };
     });
+
+    // Delete
     document.querySelectorAll('.btn-delete').forEach(btn => {
       btn.onclick = () => deleteShow(btn.dataset.id);
     });
+
+    // Edit → open modal
     document.querySelectorAll('.btn-edit').forEach(btn => {
-      btn.onclick = () => editShow(btn);
+      btn.onclick = () => openEditModal(btn);
     });
+
+    // Copy
     document.querySelectorAll('.btn-copy').forEach(btn => {
-      btn.onclick = () => copySchedule(btn.dataset.source, btn.closest('.copy-bar').querySelector('.copy-target').value);
+      btn.onclick = () => {
+        const bar = btn.closest('.copy-bar');
+        copySchedule(btn.dataset.source, bar.querySelector('.copy-target').value);
+      };
+    });
+
+    // Live end-time preview per add-show bar
+    document.querySelectorAll('.add-time').forEach(input => {
+      input.addEventListener('input', () => updateAddBarPreview(input));
+      updateAddBarPreview(input);
     });
   }
 
+  function updateAllEndPreviews() {
+    document.querySelectorAll('.add-time').forEach(input => updateAddBarPreview(input));
+  }
+
+  function updateAddBarPreview(input) {
+    const bar = input.closest('.add-show-bar');
+    if (!bar) return;
+    const previewEl = bar.querySelector('.add-end-preview');
+    const movieEnd = calcMovieEnd(input.value, MOVIE_DURATION);
+    if (movieEnd) {
+      previewEl.textContent = `End: ${fmt12(movieEnd)}`;
+      previewEl.classList.remove('unknown');
+    } else {
+      previewEl.textContent = 'End: —';
+      previewEl.classList.add('unknown');
+    }
+  }
+
+  // ── Add show ──
   function addShow(dateStr, timeVal) {
     if (!defaultTheater.value || !defaultScreen.value) {
       alertMsg('Select a default theater and screen on the left before adding shows.', 'warning');
@@ -249,12 +469,13 @@
       showtimesByDate[key].push(data.showtime);
       showtimesByDate[key].sort((a, b) => a.start_time.localeCompare(b.start_time));
       render();
-      alertMsg('Showtime added.', 'success');
-    });
+      alertMsg(`Show added: ${data.showtime.time_range} on ${data.showtime.date}`, 'success');
+    }).catch(() => alertMsg('Network error while adding show.', 'danger'));
   }
 
+  // ── Delete show ──
   function deleteShow(id) {
-    if (!confirm('Delete this showtime?')) return;
+    if (!confirm('Delete this showtime? This cannot be undone.')) return;
     fetch(`/movies/custom-admin/api/showtime/${id}/delete/`, {
       method: 'POST',
       headers: { 'X-CSRFToken': csrf() },
@@ -264,35 +485,63 @@
         showtimesByDate[k] = showtimesByDate[k].filter(s => String(s.id) !== String(id));
       }
       render();
-    });
+      alertMsg('Showtime deleted.', 'success');
+    }).catch(() => alertMsg('Network error while deleting show.', 'danger'));
   }
 
-  function editShow(btn) {
-    const newTime = prompt('New start time (HH:MM, 24h):', btn.dataset.time);
-    if (!newTime) return;
-    const newBuffer = prompt('Buffer minutes:', btn.dataset.buffer);
-    fetch(`/movies/custom-admin/api/showtime/${btn.dataset.id}/update/`, {
+  // ── Open edit modal ──
+  function openEditModal(btn) {
+    document.getElementById('editShowId').value    = btn.dataset.id;
+    document.getElementById('editStartTime').value = btn.dataset.time;
+    document.getElementById('editBuffer').value    = btn.dataset.buffer || DEFAULT_BUFFER;
+    updateEditPreview();
+    // Bootstrap 4 modal
+    $('#editShowModal').modal('show');
+  }
+
+  function updateEditPreview() {
+    const startVal  = document.getElementById('editStartTime').value;
+    const bufVal    = parseInt(document.getElementById('editBuffer').value, 10) || DEFAULT_BUFFER;
+    const movieEnd  = calcMovieEnd(startVal, MOVIE_DURATION);
+    const previewEl = document.getElementById('editEndPreviewVal');
+    previewEl.textContent = movieEnd ? fmt12(movieEnd) : '—';
+  }
+
+  document.getElementById('editStartTime').addEventListener('input', updateEditPreview);
+  document.getElementById('editBuffer').addEventListener('input', updateEditPreview);
+
+  // ── Save edit ──
+  document.getElementById('btnSaveEdit').addEventListener('click', function () {
+    const id     = document.getElementById('editShowId').value;
+    const time   = document.getElementById('editStartTime').value;
+    const buffer = parseInt(document.getElementById('editBuffer').value, 10) || DEFAULT_BUFFER;
+
+    if (!time) { alertMsg('Enter a valid start time.', 'warning'); return; }
+
+    fetch(`/movies/custom-admin/api/showtime/${id}/update/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
-      body: JSON.stringify({
-        start_time: newTime,
-        cleaning_buffer_minutes: parseInt(newBuffer, 10) || DEFAULT_BUFFER,
-      }),
+      body: JSON.stringify({ start_time: time, cleaning_buffer_minutes: buffer }),
     }).then(r => r.json()).then(data => {
       if (!data.success) { alertMsg(data.error || 'Update failed.', 'danger'); return; }
+      $('#editShowModal').modal('hide');
+      // Update local data
       for (const k of Object.keys(showtimesByDate)) {
-        showtimesByDate[k] = showtimesByDate[k].filter(s => String(s.id) !== String(btn.dataset.id));
+        showtimesByDate[k] = showtimesByDate[k].filter(s => String(s.id) !== String(id));
       }
       const key = data.showtime.date;
       showtimesByDate[key] = showtimesByDate[key] || [];
       showtimesByDate[key].push(data.showtime);
       showtimesByDate[key].sort((a, b) => a.start_time.localeCompare(b.start_time));
       render();
-    });
-  }
+      alertMsg(`Showtime updated to ${data.showtime.time_range}`, 'success');
+    }).catch(() => alertMsg('Network error while updating show.', 'danger'));
+  });
 
+  // ── Copy schedule ──
   function copySchedule(source, target) {
-    if (!target) { alertMsg('Pick a target date.', 'warning'); return; }
+    if (!target) { alertMsg('Pick a target date first.', 'warning'); return; }
+    if (source === target) { alertMsg('Source and target date must differ.', 'warning'); return; }
     fetch(copyUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
@@ -305,12 +554,13 @@
         showtimesByDate[st.date].sort((a, b) => a.start_time.localeCompare(b.start_time));
       });
       render();
-      let msg = `Copied ${data.created.length} show(s).`;
+      let msg = `Copied ${data.created.length} show(s) to ${target}.`;
       if (data.warnings && data.warnings.length) msg += ' Warnings: ' + data.warnings.join(' ');
       alertMsg(msg, data.warnings && data.warnings.length ? 'warning' : 'success');
-    });
+    }).catch(() => alertMsg('Network error while copying schedule.', 'danger'));
   }
 
+  // Initial render
   render();
 })();
 </script>

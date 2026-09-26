@@ -159,6 +159,29 @@
   .verified-badge { font-size: 11px; background: #198754; color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 6px; }
   .review-item { position: relative; }
 
+  /* ── Star Rating Widget ── */
+  .star-rating-widget {
+    display: inline-flex;
+    flex-direction: row-reverse;
+    gap: 2px;
+    margin-bottom: 4px;
+  }
+  .star-rating-widget input[type="radio"] {
+    display: none;
+  }
+  .star-rating-widget label {
+    cursor: pointer;
+    font-size: 1.6rem;
+    color: #dee2e6;
+    transition: color .15s;
+    padding: 0 2px;
+  }
+  .star-rating-widget label:hover,
+  .star-rating-widget label:hover ~ label,
+  .star-rating-widget input:checked ~ label {
+    color: #ffc107;
+  }
+
   /* ── Recommendations ── */
   .recommend-row { display: flex; gap: 14px; overflow-x: auto; padding: 10px 0 20px; }
   .recommend-card { flex: 0 0 auto; width: 140px; text-decoration: none; color: inherit; }
@@ -292,76 +315,185 @@
   </div>
 
   <!-- ══════════════════ Reviews Section ══════════════════ -->
-  <div class="reviews-section mt-4 bg-white rounded p-4 shadow-sm">
-    <h3>
-      Reviews
+  <div class="reviews-section mt-4 bg-white rounded shadow-sm" style="border-radius:12px; overflow:hidden;">
+
+    <!-- Reviews header bar -->
+    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e); color:#fff; padding:18px 24px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+      <div>
+        <h4 class="mb-0" style="font-weight:800;">
+          <i class="fas fa-star text-warning me-2"></i>Ratings &amp; Reviews
+        </h4>
+        <small style="color:rgba(255,255,255,.6);">{{ movie.review_count }} review{{ movie.review_count|pluralize }}</small>
+      </div>
       {% if avg_rating %}
-      <span class="text-warning"><i class="fas fa-star"></i> {{ avg_rating|floatformat:1 }}/5</span>
+      <div style="margin-left:auto; text-align:center;">
+        <div style="font-size:2.5rem; font-weight:900; color:#ffc107; line-height:1;">{{ avg_rating|floatformat:1 }}</div>
+        <div style="color:rgba(255,255,255,.7); font-size:.75rem;">out of 5</div>
+        <div>
+          {% with r=avg_rating|floatformat:0 %}
+          {% for i in "12345" %}
+          <i class="fas fa-star" style="font-size:.8rem; color:{% if forloop.counter <= r|add:0 %}#ffc107{% else %}rgba(255,255,255,.25){% endif %};"></i>
+          {% endfor %}
+          {% endwith %}
+        </div>
+      </div>
       {% endif %}
-    </h3>
+    </div>
 
-    {% if messages %}
-      {% for message in messages %}
-        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %}">{{ message }}</div>
-      {% endfor %}
-    {% endif %}
+    <div class="p-4">
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} alert-dismissible">
+            {{ message }}
+            <button type="button" class="btn-close" data-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
 
-    {% if user.is_authenticated %}
-      {% if can_review %}
-      <form method="POST" class="review-form mb-4">
-        {% csrf_token %}
-        <div class="mb-2">
-          <label for="rating">Your rating</label>
-          <select name="rating" id="rating" class="form-select" style="max-width:100px;" required>
-            {% for i in "12345" %}
-            <option value="{{ i }}" {% if user_review and user_review.rating|stringformat:"s" == i %}selected{% endif %}>{{ i }}</option>
-            {% endfor %}
-          </select>
+      <!-- ── Write / edit review ── -->
+      {% if user.is_authenticated %}
+        {% if can_review %}
+        <div class="card border-0 bg-light mb-4" style="border-radius:10px;">
+          <div class="card-body p-3">
+            <h6 class="fw-bold mb-3">
+              {% if user_review %}<i class="fas fa-edit text-primary me-1"></i>Edit your review{% else %}<i class="fas fa-pen text-primary me-1"></i>Write a review{% endif %}
+            </h6>
+            <form method="POST" id="reviewForm">
+              {% csrf_token %}
+              <!-- Star rating widget -->
+              <div class="mb-3">
+                <label class="form-label fw-semibold d-block mb-1">Your rating</label>
+                <div class="star-rating-widget" id="starWidget">
+                  {% for i in "54321" %}
+                  <input type="radio" name="rating" id="star{{ i }}" value="{{ i }}"
+                    {% if user_review and user_review.rating|stringformat:"s" == i %}checked{% endif %}>
+                  <label for="star{{ i }}" title="{{ i }} star{{ i|pluralize }}">
+                    <i class="fas fa-star"></i>
+                  </label>
+                  {% endfor %}
+                </div>
+                <small class="text-muted" id="starLabel">
+                  {% if user_review %}{{ user_review.rating }} star{{ user_review.rating|pluralize }} selected{% else %}Click a star to rate{% endif %}
+                </small>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Your review <span class="text-muted fw-normal">(optional)</span></label>
+                <textarea name="comment" class="form-control" rows="3"
+                  placeholder="Share your thoughts about the movie…" id="reviewComment">{% if user_review %}{{ user_review.comment }}{% endif %}</textarea>
+                <div class="d-flex justify-content-between mt-1">
+                  <small class="text-muted" id="charCount">0 / 1000</small>
+                </div>
+              </div>
+              <div class="d-flex gap-2 flex-wrap">
+                <button type="submit" class="btn btn-primary btn-sm">
+                  <i class="fas fa-save me-1"></i>{% if user_review %}Update Review{% else %}Submit Review{% endif %}
+                </button>
+                {% if user_review %}
+                <button type="button" class="btn btn-outline-danger btn-sm" id="btnDeleteReview"
+                        data-review-id="{{ user_review.id }}">
+                  <i class="fas fa-trash me-1"></i>Delete Review
+                </button>
+                {% endif %}
+              </div>
+            </form>
+          </div>
         </div>
-        <div class="mb-2">
-          <textarea name="comment" class="form-control" rows="2" placeholder="Share your thoughts (optional)">{% if user_review %}{{ user_review.comment }}{% endif %}</textarea>
+        {% else %}
+        <div class="alert" style="background:#e8f4fd; border:1px solid #b6d4fe; border-radius:8px; color:#084298;">
+          <i class="fas fa-lock me-2"></i>
+          <strong>Verified viewers only.</strong>
+          You can review this movie after booking and watching it.
         </div>
-        <button type="submit" class="btn btn-primary btn-sm">
-          {% if user_review %}Update Review{% else %}Submit Review{% endif %}
-        </button>
-      </form>
+        {% endif %}
       {% else %}
       <p class="text-muted">
-        <i class="fas fa-lock me-1"></i>
-        You can review this movie once you've booked and watched it.
+        <a href="{% url 'login' %}" class="fw-bold">Log in</a> to rate and review this movie.
       </p>
       {% endif %}
-    {% else %}
-    <p><a href="{% url 'login' %}">Log in</a> to leave a review.</p>
-    {% endif %}
 
-    {% for review in reviews %}
-    <div class="review-item border-bottom py-2">
-      <strong>{{ review.user.username }}</strong>
-      {% if review.is_verified_viewer %}<span class="verified-badge"><i class="fas fa-check"></i> Verified Viewer</span>{% endif %}
-      <span class="text-warning">{{ review.rating }}/5 <i class="fas fa-star"></i></span>
-      <span class="text-muted small">
-        {{ review.created_at|date:"M d, Y" }}{% if review.updated_at != review.created_at %} (edited){% endif %}
-      </span>
-      {% if user.is_authenticated and review.user_id != user.id %}
-      <a href="{% url 'report_review' review.id %}" class="text-muted small float-end"><i class="fas fa-flag"></i> Report</a>
-      {% endif %}
-      {% if review.comment %}<p class="mb-0">{{ review.comment }}</p>{% endif %}
+      <!-- ── Review list ── -->
+      <div id="reviewList">
+        {% for review in reviews %}
+        <div class="review-item pb-3 mb-3 border-bottom" id="review-{{ review.id }}">
+          <div class="d-flex align-items-start gap-3">
+            <!-- Avatar -->
+            <div style="width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#667eea,#764ba2);
+                        display:flex; align-items:center; justify-content:center; color:#fff;
+                        font-weight:700; font-size:1rem; flex-shrink:0;">
+              {{ review.user.username|slice:":1"|upper }}
+            </div>
+            <div style="flex:1; min-width:0;">
+              <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                <strong>{{ review.user.username }}</strong>
+                {% if review.is_verified_viewer %}
+                <span style="font-size:.7rem; background:#198754; color:#fff; padding:2px 7px; border-radius:4px;">
+                  <i class="fas fa-check-circle me-1"></i>Verified Viewer
+                </span>
+                {% endif %}
+                <!-- Star display -->
+                <span>
+                  {% for i in "12345" %}
+                  <i class="fas fa-star" style="font-size:.8rem; color:{% if forloop.counter <= review.rating %}#ffc107{% else %}#dee2e6{% endif %};"></i>
+                  {% endfor %}
+                </span>
+                <span class="text-muted" style="font-size:.78rem;">
+                  {{ review.created_at|date:"M d, Y" }}{% if review.updated_at != review.created_at %} <em>(edited)</em>{% endif %}
+                </span>
+                <!-- Actions -->
+                <span class="ms-auto d-flex gap-2">
+                  {% if user.is_authenticated and review.user_id == user.id %}
+                  <form method="POST" action="{% url 'delete_review' review.id %}" class="d-inline review-delete-form">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-link btn-sm text-danger p-0"
+                            onclick="return confirm('Delete your review?');"
+                            title="Delete your review">
+                      <i class="fas fa-trash-alt"></i>
+                    </button>
+                  </form>
+                  {% elif user.is_authenticated %}
+                  <a href="{% url 'report_review' review.id %}" class="text-muted" style="font-size:.8rem;" title="Report this review">
+                    <i class="fas fa-flag"></i>
+                  </a>
+                  {% endif %}
+                </span>
+              </div>
+              {% if review.comment %}
+              <p class="mb-0" style="font-size:.9rem; color:#333;">{{ review.comment }}</p>
+              {% else %}
+              <p class="mb-0 text-muted" style="font-size:.85rem;"><em>No written review.</em></p>
+              {% endif %}
+              {% if review.report_count and user.is_staff %}
+              <small class="text-danger mt-1 d-block">
+                <i class="fas fa-flag me-1"></i>{{ review.report_count }} report{{ review.report_count|pluralize }}
+              </small>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted py-4">
+          <i class="fas fa-comment-slash fa-2x mb-2 d-block"></i>
+          No reviews yet. Be the first to review this movie!
+        </div>
+        {% endfor %}
+      </div>
     </div>
-    {% empty %}
-    <p class="text-muted">No reviews yet. Be the first to review this movie!</p>
-    {% endfor %}
   </div>
 
   <!-- ══════════════════ Recommendations ══════════════════ -->
   {% if similar_movies %}
   <div class="mt-5">
-    <h4>Similar Movies</h4>
+    <h4 class="fw-bold mb-3"><i class="fas fa-layer-group text-primary me-2"></i>Similar Movies</h4>
     <div class="recommend-row">
       {% for m in similar_movies %}
       <a href="{% url 'theater_list' m.id %}" class="recommend-card">
-        <img src="{{ m.image.url }}" alt="{{ m.name }}">
+        <div style="position:relative;">
+          <img src="{{ m.image.url }}" alt="{{ m.name }}">
+          {% if m.run_ended %}<span style="position:absolute;top:4px;right:4px;background:rgba(220,53,69,.9);color:#fff;font-size:.6rem;padding:2px 5px;border-radius:4px;">ENDED</span>{% endif %}
+        </div>
         <div class="title">{{ m.name }}</div>
+        {% if m.duration_display %}<div style="font-size:.68rem;color:#888;">{{ m.duration_display }}</div>{% endif %}
+        {% if m.average_rating %}<div style="font-size:.7rem;color:#ffc107;"><i class="fas fa-star"></i> {{ m.average_rating|floatformat:1 }}</div>{% endif %}
       </a>
       {% endfor %}
     </div>
@@ -370,12 +502,13 @@
 
   {% if trending_movies %}
   <div class="mt-4">
-    <h4>Trending Now</h4>
+    <h4 class="fw-bold mb-3"><i class="fas fa-fire text-danger me-2"></i>Trending Now</h4>
     <div class="recommend-row">
       {% for m in trending_movies %}
       <a href="{% url 'theater_list' m.id %}" class="recommend-card">
         <img src="{{ m.image.url }}" alt="{{ m.name }}">
         <div class="title">{{ m.name }}</div>
+        {% if m.duration_display %}<div style="font-size:.68rem;color:#888;">{{ m.duration_display }}</div>{% endif %}
       </a>
       {% endfor %}
     </div>
@@ -384,18 +517,18 @@
 
   {% if recent_movies %}
   <div class="mt-4 mb-5">
-    <h4>Recently Released</h4>
+    <h4 class="fw-bold mb-3"><i class="fas fa-calendar-plus text-success me-2"></i>Recently Released</h4>
     <div class="recommend-row">
       {% for m in recent_movies %}
       <a href="{% url 'theater_list' m.id %}" class="recommend-card">
         <img src="{{ m.image.url }}" alt="{{ m.name }}">
         <div class="title">{{ m.name }}</div>
+        {% if m.release_date %}<div style="font-size:.68rem;color:#888;">{{ m.release_date|date:"M Y" }}</div>{% endif %}
       </a>
       {% endfor %}
     </div>
   </div>
   {% endif %}
-</div>
 
 <!-- ══════════════════ Showtime JS ══════════════════ -->
 <script>
@@ -421,7 +554,7 @@
   window.handleDateClick = handleDateClick;
 
   function loadShowtimes(dateStr) {
-    // Use pre-loaded data if available
+    // Use pre-loaded / cached data if available
     if (INITIAL_DATA[dateStr]) {
       renderShowtimes(INITIAL_DATA[dateStr].theaters, dateStr);
       return;
@@ -434,16 +567,20 @@
     fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(r => r.json())
       .then(data => {
-        if (!data.success) { panel.innerHTML = `<div class="no-shows-msg">${data.error || 'Error loading showtimes.'}</div>`; return; }
-        // Cache
+        // Cache result (success:true is now always returned for valid movie dates)
         INITIAL_DATA[dateStr] = data;
+        if (!data.success) {
+          panel.innerHTML = `<div class="no-shows-msg">${data.error || 'Error loading showtimes.'}</div>`;
+          return;
+        }
         renderShowtimes(data.theaters, dateStr);
       })
       .catch(() => {
-        panel.innerHTML = `<div class="no-shows-msg">Failed to load showtimes. Please refresh.</div>`;
+        panel.innerHTML = `<div class="no-shows-msg">Failed to load showtimes. Please refresh the page.</div>`;
       });
   }
 
+  // ── Status helpers ──
   function badgeClass(status) {
     if (status === 'Available')   return 'badge-available';
     if (status === 'Almost Full') return 'badge-almostfull';
@@ -453,70 +590,63 @@
   }
 
   function timeBtnClass(status) {
-    if (status === 'Sold Out')   return 'sold-out';
-    if (status === 'Closed')     return 'closed-show';
-    if (status === 'Cancelled')  return 'cancelled-show';
+    if (status === 'Sold Out')    return 'sold-out';
+    if (status === 'Closed')      return 'closed-show';
+    if (status === 'Cancelled')   return 'cancelled-show';
     if (status === 'Almost Full') return 'almost-full';
     return '';
   }
 
+  // ── Render showtime results ──
   function renderShowtimes(theaters, dateStr) {
     const panel = document.getElementById('showtime-results');
     if (!theaters || theaters.length === 0) {
       panel.innerHTML = `<div class="no-shows-msg">
         <i class="fas fa-calendar-times fa-2x mb-2 d-block text-muted"></i>
-        No shows available for this date.
+        No shows scheduled for this date.
       </div>`;
       return;
     }
 
     let html = '';
     theaters.forEach(theater => {
-      if (!theater.showtimes || theater.showtimes.length === 0) {
-        html += `<div class="venue-block">
-          <div class="venue-header">
-            <div>
-              <div class="venue-name">${escHtml(theater.name)}</div>
-              <div class="venue-amenities">
-                <span><i class="fas fa-mobile-alt text-success"></i>M-Ticket</span>
-                <span><i class="fas fa-utensils text-warning"></i>F&B</span>
-                <span><i class="fas fa-parking text-primary"></i>Parking</span>
-              </div>
-            </div>
-          </div>
-          <div class="no-shows-msg" style="border:none;border-radius:0;">No shows available for this date.</div>
-        </div>`;
-        return;
-      }
       html += `<div class="venue-block">
         <div class="venue-header">
           <div>
             <div class="venue-name">${escHtml(theater.name)}</div>
             <div class="venue-amenities">
               <span><i class="fas fa-mobile-alt text-success"></i>M-Ticket</span>
-              <span><i class="fas fa-utensils text-warning"></i>F&B</span>
+              <span><i class="fas fa-utensils text-warning"></i>F&amp;B</span>
               <span><i class="fas fa-parking text-primary"></i>Parking</span>
               <span><i class="fas fa-wheelchair text-info"></i>Wheelchair</span>
             </div>
           </div>
-        </div>
-        <div class="showtimes-row">`;
+        </div>`;
 
-      theater.showtimes.forEach(st => {
-        const btnCls = timeBtnClass(st.status);
-        const bdgCls = badgeClass(st.status);
-        const label = st.status_label || st.status;
-        const range = st.time_range || (st.start_time + ' - ' + st.end_time);
-        const clickable = st.bookable !== undefined ? st.bookable : (st.status === 'Available' || st.status === 'Almost Full');
-        const href = clickable ? BOOK_URL_TPL.replace('__ID__', st.id) : 'javascript:void(0)';
-        html += `<a href="${href}" class="time-btn ${btnCls}" title="${st.screen} — ${st.screen_type}">
-          <span class="t-time">${escHtml(range)}</span>
-          <span class="t-screen">${escHtml(st.screen)}</span>
-          <span class="t-badge ${bdgCls}">${escHtml(label)}</span>
-        </a>`;
-      });
+      if (!theater.showtimes || theater.showtimes.length === 0) {
+        html += `<div class="no-shows-msg" style="border:none;border-radius:0;">No shows at this theater for the selected date.</div>`;
+      } else {
+        html += `<div class="showtimes-row">`;
+        theater.showtimes.forEach(st => {
+          const btnCls   = timeBtnClass(st.status);
+          const bdgCls   = badgeClass(st.status);
+          const label    = st.status_label || st.status;
+          const range    = st.time_range || (st.start_time + ' - ' + st.end_time);
+          const bookable = st.bookable !== undefined
+            ? st.bookable
+            : (st.status === 'Available' || st.status === 'Almost Full');
+          const href     = bookable ? BOOK_URL_TPL.replace('__ID__', st.id) : 'javascript:void(0)';
 
-      html += `</div></div>`;
+          html += `<a href="${href}" class="time-btn ${btnCls}" title="${escHtml(st.screen)} — ${escHtml(st.screen_type)}">
+            <span class="t-time">${escHtml(range)}</span>
+            <span class="t-screen">${escHtml(st.screen)}</span>
+            <span class="t-badge ${bdgCls}">${escHtml(label)}</span>
+          </a>`;
+        });
+        html += `</div>`;
+      }
+
+      html += `</div>`; // venue-block
     });
 
     panel.innerHTML = html;
@@ -528,13 +658,67 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // On page load, render initial date
+  // On page load: render initial date's shows
   document.addEventListener('DOMContentLoaded', function () {
     loadShowtimes(currentDate);
-    // Scroll active pill into view
+    // Scroll active date pill into view
     const activePill = document.querySelector('.date-pill.active');
-    if (activePill) activePill.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+    if (activePill) {
+      activePill.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+    }
   });
 })();
+</script>
+
+<!-- ── Star Rating & Review UI JS ── -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // ── Star widget: update label on click ──
+  const radios = document.querySelectorAll('.star-rating-widget input[type="radio"]');
+  const starLabel = document.getElementById('starLabel');
+  radios.forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      if (starLabel) {
+        const v = parseInt(this.value, 10);
+        starLabel.textContent = v + ' star' + (v !== 1 ? 's' : '') + ' selected';
+      }
+    });
+  });
+
+  // ── Char counter for review textarea ──
+  const commentEl = document.getElementById('reviewComment');
+  const charCount = document.getElementById('charCount');
+  if (commentEl && charCount) {
+    function updateCount() {
+      const len = commentEl.value.length;
+      charCount.textContent = len + ' / 1000';
+      charCount.style.color = len > 900 ? '#dc3545' : '#888';
+    }
+    commentEl.addEventListener('input', updateCount);
+    updateCount();
+  }
+
+  // ── Delete review (main review form delete button, AJAX) ──
+  const btnDelete = document.getElementById('btnDeleteReview');
+  if (btnDelete) {
+    btnDelete.addEventListener('click', function () {
+      if (!confirm('Are you sure you want to delete your review? This cannot be undone.')) return;
+      const reviewId = this.dataset.reviewId;
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+      fetch('/movies/review/' + reviewId + '/delete/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            // Remove the review write form card from DOM and refresh page
+            window.location.reload();
+          }
+        })
+        .catch(() => window.location.reload());
+    });
+  }
+});
 </script>
 {% endblock %}

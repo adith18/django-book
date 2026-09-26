@@ -238,15 +238,16 @@ def api_showtimes_for_date(request, movie_id, show_date):
     except ValueError:
         return JsonResponse({'success': False, 'error': 'Invalid date format.'}, status=400)
 
-    # Verify the date is within the movie's theatrical run
     today = timezone.localdate()
-    if movie.end_date and target_date > movie.end_date:
-        return JsonResponse({'success': False, 'error': 'Movie run has ended.'}, status=400)
-    if movie.release_date and target_date < movie.release_date:
-        return JsonResponse({'success': False, 'error': 'Date is before release.'}, status=400)
-    if target_date < today:
-        return JsonResponse({'success': False, 'error': 'Date is in the past.'}, status=400)
 
+    # Dates outside the movie's theatrical run → graceful empty response (not an error)
+    if movie.end_date and target_date > movie.end_date:
+        return JsonResponse({'success': True, 'date': show_date, 'theaters': [],
+                             'notice': 'Movie run has ended for this date.'})
+    if movie.release_date and target_date < movie.release_date:
+        return JsonResponse({'success': True, 'date': show_date, 'theaters': [],
+                             'notice': 'Date is before the movie release.'})
+    # Past dates: still return shows (they will appear as Closed) so customers can see history
     showtimes_qs = (
         ShowTime.objects
         .filter(movie=movie, date=target_date, is_cancelled=False)
@@ -288,6 +289,27 @@ def report_review(request, review_id):
         return redirect('theater_list', movie_id=review.movie_id)
 
     return render(request, 'movies/report_review.html', {'review': review})
+
+
+# ---------------------------------------------------------------------------
+# Delete own review
+# ---------------------------------------------------------------------------
+
+@login_required(login_url='login')
+@require_POST
+def delete_review(request, review_id):
+    """Allow a user to delete their own review."""
+    review = get_object_or_404(Review, id=review_id, user=request.user)
+    movie_id = review.movie_id
+    review.delete()
+    is_ajax = (
+        request.headers.get('x-requested-with') == 'XMLHttpRequest' or
+        request.content_type == 'application/json'
+    )
+    if is_ajax:
+        return JsonResponse({'success': True})
+    messages.success(request, 'Your review has been deleted.')
+    return redirect('theater_list', movie_id=movie_id)
 
 
 # ---------------------------------------------------------------------------

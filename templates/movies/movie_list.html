@@ -1,115 +1,285 @@
 {% extends "users/base.html" %}
 
 {% block content %}
-<div class="container py-5">
-    <h1 class="text-center mb-5">Movies</h1>
-
-    <div class="row justify-content-center mb-5">
-        <div class="col-md-8">
-            <form method="GET" action="{% url 'movie_list' %}" class="search-bar">
-                <div class="input-group">
-                    <input
-                        class="form-control form-control-lg"
-                        name="search"
-                        placeholder="Search for Movies, Events, Plays, Sports and Activities"
-                        type="text"
-                        value="{{ request.GET.search|default_if_none:'' }}"
-                        aria-label="Search for movies"
-                    />
-                    <div class="input-group-append">
-                        <button class="btn btn-primary" type="submit">
-                            <i class="fas fa-search"></i> Search
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div class="row" id="movieList">
-        {% for movie in movies %}
-        <div class="col-md-4 mb-4">
-            <div class="card h-100 shadow-sm">
-                <img src="{{ movie.image.url }}" class="card-img-top" alt="{{ movie.name }}" style="height: 300px; object-fit: cover;">
-                <div class="card-body">
-                    <h5 class="card-title">{{ movie.name }}</h5>
-                    <p class="card-text">
-                        <i class="fas fa-star text-warning"></i> {{ movie.rating }}
-                    </p>
-                    <p class="card-text">
-                        <small class="text-muted">
-                            <i class="fas fa-users"></i> Cast: {{ movie.cast }}
-                        </small>
-                    </p>
-                </div>
-                <div class="card-footer bg-white border-top-0">
-                    {% if movie.end_date and movie.end_date < today %}
-                    <span class="btn btn-secondary btn-block disabled">Run ended</span>
-                    {% else %}
-                    <a href="{% url 'theater_list' movie.id %}" class="btn btn-outline-primary btn-block">
-                        Book Tickets <i class="fas fa-chevron-right ml-2"></i>
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        {% empty %}
-        <div class="col-12 text-center">
-            <p class="lead">No movies found. Try a different search term.</p>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-<!-- Bootstrap JS and dependencies -->
-<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
-<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-
-<!-- Font Awesome -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
-
 <style>
-    .card {
-        transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
-    }
-    .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1) !important;
-    }
+  /* ── Hero / search ── */
+  .movie-list-hero {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #fff;
+    padding: 40px 0 30px;
+    margin-bottom: 32px;
+  }
+  .movie-list-hero h1 { font-size: 2rem; font-weight: 800; margin-bottom: 6px; }
+  .movie-list-hero p  { color: rgba(255,255,255,.65); margin-bottom: 20px; }
+
+  /* ── Search bar ── */
+  .search-wrap { max-width: 640px; margin: 0 auto; }
+  .search-wrap .form-control {
+    border-radius: 30px 0 0 30px;
+    padding: 12px 20px;
+    font-size: 1rem;
+    border: none;
+    box-shadow: none;
+  }
+  .search-wrap .btn {
+    border-radius: 0 30px 30px 0;
+    padding: 12px 24px;
+  }
+
+  /* ── Movie Cards ── */
+  .movie-card {
+    border: none;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,.1);
+    transition: transform .25s ease, box-shadow .25s ease;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .movie-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 8px 28px rgba(0,0,0,.18);
+  }
+  .movie-card .poster-wrap {
+    position: relative;
+    height: 300px;
+    overflow: hidden;
+    background: #111;
+  }
+  .movie-card .poster-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .35s ease;
+  }
+  .movie-card:hover .poster-wrap img { transform: scale(1.04); }
+
+  /* Run-ended overlay */
+  .run-ended-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .run-ended-overlay span {
+    background: rgba(220,53,69,.9);
+    color: #fff;
+    font-weight: 700;
+    font-size: .85rem;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    border-radius: 20px;
+  }
+
+  /* Rating badge */
+  .rating-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0,0,0,.7);
+    color: #ffc107;
+    font-weight: 700;
+    font-size: .8rem;
+    padding: 4px 9px;
+    border-radius: 20px;
+    backdrop-filter: blur(4px);
+  }
+
+  /* Cert badge */
+  .cert-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(13,110,253,.85);
+    color: #fff;
+    font-weight: 700;
+    font-size: .72rem;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+
+  .movie-card .card-body {
+    padding: 14px 16px 8px;
+    flex: 1;
+  }
+  .movie-card .card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .movie-meta { font-size: .78rem; color: #666; margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+  .movie-meta span { display: flex; align-items: center; gap: 4px; }
+
+  .genre-list { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .genre-pill {
+    font-size: .7rem;
+    background: #e8f0fe;
+    color: #1a56db;
+    border-radius: 20px;
+    padding: 2px 8px;
+    font-weight: 600;
+  }
+
+  .avail-info { font-size: .73rem; color: #888; margin-top: 4px; }
+  .avail-info .from { color: #198754; font-weight: 600; }
+  .avail-info .until { color: #dc3545; font-weight: 600; }
+
+  .movie-card .card-footer {
+    background: #fff;
+    border-top: 1px solid #f0f0f0;
+    padding: 10px 16px 14px;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #888;
+  }
+  .empty-state i { font-size: 3rem; margin-bottom: 16px; }
 </style>
 
-<script>
-    $(document).ready(function() {
-        // Add animation to cards on hover
-        $('.card').hover(
-            function() { $(this).addClass('shadow'); },
-            function() { $(this).removeClass('shadow'); }
-        );
+<!-- Hero -->
+<div class="movie-list-hero">
+  <div class="container">
+    <h1><i class="fas fa-film me-2"></i> Now Showing &amp; Coming Soon</h1>
+    <p>Book tickets for the latest movies at your nearest theater</p>
+    <div class="search-wrap">
+      <form method="GET" action="{% url 'movie_list' %}">
+        <div class="input-group">
+          <input
+            class="form-control"
+            name="search"
+            placeholder="Search movies, genres, cast…"
+            type="text"
+            value="{{ request.GET.search|default_if_none:'' }}"
+            aria-label="Search movies"
+          />
+          <div class="input-group-append">
+            <button class="btn btn-primary" type="submit">
+              <i class="fas fa-search me-1"></i> Search
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
-        // Implement client-side filtering
-        $('input[name="search"]').on('input', function() {
-            var searchTerm = $(this).val().toLowerCase();
-            $('#movieList .col-md-4').each(function() {
-                var movieTitle = $(this).find('.card-title').text().toLowerCase();
-                if (movieTitle.includes(searchTerm)) {
-                    $(this).show();
-                } else {
-                    $(this).hide();
-                }
-            });
-        });
-    });
-</script>
-<!-- <h1>Movies</h1>
-<ul>
-    {% for movie in movies%}
-    <li>
-        <img src="{{movie.image.url}}" alt="image" >
-        <strong>{{movie.name}}</strong>{{movie.rating}}
-        <p>Cast:{{movie.cast}}</p>
-        <a href="{% url 'theater_list' movie.id %}">View Theaters</a>
-    </li>
+<div class="container pb-5">
+  <div class="row" id="movieList">
+
+    {% for movie in movies %}
+    <div class="col-lg-3 col-md-4 col-sm-6 mb-4 movie-col" data-title="{{ movie.name|lower }}">
+      <div class="movie-card card">
+
+        <!-- Poster -->
+        <div class="poster-wrap">
+          <img src="{{ movie.image.url }}" alt="{{ movie.name }}">
+
+          {% if movie.age_certification %}
+          <span class="cert-badge">{{ movie.age_certification }}</span>
+          {% endif %}
+
+          {% if movie.rating %}
+          <span class="rating-badge"><i class="fas fa-star"></i> {{ movie.rating }}</span>
+          {% endif %}
+
+          {% if movie.run_ended %}
+          <div class="run-ended-overlay"><span>RUN ENDED</span></div>
+          {% endif %}
+        </div>
+
+        <!-- Card body -->
+        <div class="card-body">
+          <h5 class="card-title" title="{{ movie.name }}">{{ movie.name }}</h5>
+
+          <!-- Duration + Language -->
+          <div class="movie-meta">
+            {% if movie.duration_display %}
+            <span><i class="fas fa-clock text-primary"></i> {{ movie.duration_display }}</span>
+            {% endif %}
+            {% if movie.language %}
+            <span><i class="fas fa-language text-secondary"></i> {{ movie.language.name }}</span>
+            {% endif %}
+          </div>
+
+          <!-- Genres -->
+          {% with genres=movie.genres.all %}
+          {% if genres %}
+          <div class="genre-list">
+            {% for g in genres|slice:":3" %}<span class="genre-pill">{{ g.name }}</span>{% endfor %}
+          </div>
+          {% endif %}
+          {% endwith %}
+
+          <!-- Availability dates -->
+          <div class="avail-info">
+            {% if movie.release_date %}
+            <span class="from"><i class="fas fa-calendar-check"></i> From {{ movie.release_date|date:"M d, Y" }}</span>
+            {% endif %}
+            {% if movie.end_date %}
+            &nbsp;–&nbsp;
+            <span class="until"><i class="fas fa-calendar-times"></i> Until {{ movie.end_date|date:"M d, Y" }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Footer CTA -->
+        <div class="card-footer">
+          {% if movie.run_ended %}
+          <span class="btn btn-secondary btn-block disabled w-100" style="cursor:not-allowed;">
+            <i class="fas fa-ban me-1"></i> Run Ended
+          </span>
+          {% elif movie.release_date and movie.release_date > today %}
+          <a href="{% url 'theater_list' movie.id %}" class="btn btn-outline-secondary btn-block w-100">
+            <i class="fas fa-calendar-alt me-1"></i> Releasing {{ movie.release_date|date:"M d" }}
+          </a>
+          {% else %}
+          <a href="{% url 'theater_list' movie.id %}" class="btn btn-outline-primary btn-block w-100">
+            Book Tickets <i class="fas fa-chevron-right ms-1"></i>
+          </a>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+      <div class="empty-state">
+        <i class="fas fa-film d-block text-muted"></i>
+        <h4 class="text-muted">No movies found</h4>
+        <p>Try a different search term or check back later.</p>
+        {% if request.GET.search %}
+        <a href="{% url 'movie_list' %}" class="btn btn-outline-primary mt-2">Clear Search</a>
+        {% endif %}
+      </div>
+    </div>
     {% endfor %}
-</ul> -->
+
+  </div>
+</div>
+
+<script>
+  // Client-side live search filter
+  document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.querySelector('input[name="search"]');
+    if (!searchInput) return;
+    searchInput.addEventListener('input', function () {
+      const q = this.value.toLowerCase().trim();
+      document.querySelectorAll('.movie-col').forEach(function (col) {
+        const title = col.dataset.title || '';
+        col.style.display = (!q || title.includes(q)) ? '' : 'none';
+      });
+    });
+  });
+</script>
 {% endblock %}

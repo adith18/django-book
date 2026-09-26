@@ -17,6 +17,7 @@ urlpatterns = [
 
     path('booking/<int:booking_id>/cancel/', views.cancel_booking, name='cancel_booking'),
     path('review/<int:review_id>/report/', views.report_review, name='report_review'),
+    path('review/<int:review_id>/delete/', views.delete_review, name='delete_review'),
     path('custom-admin/', views.admin_dashboard, name='admin_dashboard'),
     path('custom-admin/movie/schedule/', views.admin_movie_schedule, name='admin_movie_schedule'),
     path('custom-admin/movie/<int:movie_id>/schedule/', views.admin_movie_schedule, name='admin_movie_schedule_edit'),
