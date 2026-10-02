@@ -535,7 +535,7 @@
 (function () {
   const MOVIE_ID = {{ movie.id }};
   const SHOWTIMES_URL_TPL = "{% url 'api_showtimes_for_date' movie.id '9999-01-01' %}";
-  const BOOK_URL_TPL = "/showtime/__ID__/seats/book/";
+  const BOOK_URL_TPL = "{% url 'book_seats' 999999 %}";
 
   const INITIAL_DATA = {};
   let currentDate = "{{ selected_date|date:'Y-m-d' }}";
