@@ -287,6 +287,9 @@
   </div><!-- /.seat-page-wrapper -->
 </div>
 
+{% if razorpay_enabled %}
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+{% endif %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -632,6 +635,30 @@ document.addEventListener('DOMContentLoaded', function () {
     .catch(() => showToast('Network error releasing hold.', 'danger'));
   });
 
+  const razorpayEnabled = {{ razorpay_enabled|yesno:"true,false" }};
+  const razorpayKeyId = '{{ razorpay_key_id|escapejs }}';
+
+  function completeVerifiedBooking(paymentId, payload) {
+    const verifyUrl = `/movies/payment/${paymentId}/verify/`;
+    return fetch(verifyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken(),
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify(payload || {})
+    }).then(r => r.json());
+  }
+
+  function reportPaymentFailed(paymentId, reason) {
+    fetch(`/movies/payment/${paymentId}/failed/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+      body: JSON.stringify({ reason: reason || '' })
+    });
+  }
+
   /* ─── Confirm & Pay Button ─── */
   btnBook.addEventListener('click', function () {
     if (!isHeld || heldSeatIds.size === 0) {
@@ -653,20 +680,83 @@ document.addEventListener('DOMContentLoaded', function () {
     })
     .then(r => r.json())
     .then(data => {
-      if (data.success) {
-        stopTimer();
-        showToast(data.message || 'Booking confirmed! Redirecting…', 'success');
-        setTimeout(() => { window.location.href = data.redirect_url || '/user/profile/'; }, 1500);
-      } else {
-        showToast(data.error || 'Booking failed. Please try again.', 'danger');
+      if (!data.success) {
+        showToast(data.error || 'Checkout failed.', 'danger');
         btnBook.disabled = false;
         btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
-        isHeld = false;
         fetchSeatStatus();
+        return;
       }
+      const checkout = data.checkout;
+      const paymentId = data.payment_transaction_id || checkout.payment_transaction_id;
+
+      if (checkout.mock) {
+        return completeVerifiedBooking(paymentId, {}).then(verifyData => {
+          if (verifyData.success) {
+            stopTimer();
+            showToast(verifyData.message || 'Booking confirmed!', 'success');
+            setTimeout(() => { window.location.href = verifyData.redirect_url || '/user/profile/'; }, 1200);
+          } else {
+            showToast(verifyData.error || 'Payment verification failed.', 'danger');
+            btnBook.disabled = false;
+            btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
+          }
+        });
+      }
+
+      if (!razorpayEnabled || typeof Razorpay === 'undefined') {
+        showToast('Razorpay is not configured on this server.', 'danger');
+        btnBook.disabled = false;
+        btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
+        return;
+      }
+
+      const options = {
+        key: checkout.key_id || razorpayKeyId,
+        amount: checkout.amount,
+        currency: checkout.currency,
+        name: 'BookMySeat',
+        description: 'Movie tickets',
+        order_id: checkout.order_id,
+        handler: function (response) {
+          completeVerifiedBooking(paymentId, {
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature
+          }).then(verifyData => {
+            if (verifyData.success) {
+              stopTimer();
+              showToast('Payment successful! Redirecting…', 'success');
+              setTimeout(() => { window.location.href = verifyData.redirect_url || '/user/profile/'; }, 1200);
+            } else {
+              showToast(verifyData.error || 'Verification failed.', 'danger');
+              btnBook.disabled = false;
+              btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
+            }
+          });
+        },
+        modal: {
+          ondismiss: function () {
+            reportPaymentFailed(paymentId, 'User closed payment window');
+            btnBook.disabled = false;
+            btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
+          }
+        }
+      };
+      const rzp = new Razorpay(options);
+      rzp.on('payment.failed', function (resp) {
+        reportPaymentFailed(paymentId, resp.error && resp.error.description);
+        showToast('Payment failed. Seats released.', 'danger');
+        btnBook.disabled = false;
+        btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
+        fetchSeatStatus();
+      });
+      rzp.open();
+      btnBook.disabled = false;
+      btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
     })
     .catch(() => {
-      showToast('Network error during booking. Please try again.', 'danger');
+      showToast('Network error during checkout. Please try again.', 'danger');
       btnBook.disabled = false;
       btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
     });

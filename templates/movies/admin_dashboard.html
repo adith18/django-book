@@ -63,6 +63,50 @@
     </div>
   </div>
 
+  {% if analytics %}
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center flex-wrap">
+      <span><i class="fas fa-chart-line me-2"></i> Business Analytics</span>
+      <a class="btn btn-sm btn-light" href="?export=csv&start_date={{ analytics.filter_start }}&end_date={{ analytics.filter_end }}">Export CSV</a>
+    </div>
+    <div class="card-body">
+      <form method="get" class="form-inline mb-3">
+        <label class="mr-2">From</label>
+        <input type="date" name="start_date" value="{{ analytics.filter_start }}" class="form-control form-control-sm mr-3">
+        <label class="mr-2">To</label>
+        <input type="date" name="end_date" value="{{ analytics.filter_end }}" class="form-control form-control-sm mr-3">
+        <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+      </form>
+      <div class="row text-center mb-3">
+        <div class="col-md-2 col-6 mb-2"><div class="border rounded p-2"><small>Period revenue</small><div><strong>₹{{ analytics.revenue_total }}</strong></div></div></div>
+        <div class="col-md-2 col-6 mb-2"><div class="border rounded p-2"><small>Daily</small><div><strong>₹{{ analytics.revenue_daily }}</strong></div></div></div>
+        <div class="col-md-2 col-6 mb-2"><div class="border rounded p-2"><small>Weekly</small><div><strong>₹{{ analytics.revenue_weekly }}</strong></div></div></div>
+        <div class="col-md-2 col-6 mb-2"><div class="border rounded p-2"><small>Monthly</small><div><strong>₹{{ analytics.revenue_monthly }}</strong></div></div></div>
+        <div class="col-md-2 col-6 mb-2"><div class="border rounded p-2"><small>Yearly</small><div><strong>₹{{ analytics.revenue_yearly }}</strong></div></div></div>
+        <div class="col-md-2 col-6 mb-2"><div class="border rounded p-2"><small>Cancellations / Refunds</small><div><strong>{{ analytics.cancelled_bookings }} / {{ analytics.refunds }}</strong></div></div></div>
+      </div>
+      <div class="row">
+        <div class="col-md-6">
+          <h6>Top movies (bookings)</h6>
+          <ul class="list-group list-group-flush small mb-3">
+            {% for row in analytics.top_movies %}
+            <li class="list-group-item d-flex justify-content-between"><span>{{ row.movie__name }}</span><span>{{ row.bookings }} · ₹{{ row.revenue|default:0 }}</span></li>
+            {% empty %}<li class="list-group-item text-muted">No data in range.</li>{% endfor %}
+          </ul>
+        </div>
+        <div class="col-md-6">
+          <h6>Theater occupancy (range)</h6>
+          <ul class="list-group list-group-flush small mb-3">
+            {% for row in analytics.theater_occupancy %}
+            <li class="list-group-item d-flex justify-content-between"><span>{{ row.theater }}</span><span>{{ row.occupancy_pct }}%</span></li>
+            {% empty %}<li class="list-group-item text-muted">No theaters.</li>{% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Quick Management Links -->
   <div class="card mb-4 shadow-sm">
     <div class="card-header bg-dark text-white">

@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import (
-    Genre, Language, CastMember, Movie, MovieCast, MoviePoster,
-    Theater, Screen, ShowTime, Seat, Booking, Review, ReviewReport, SeatReservation
+    Genre, Language, CastMember, Movie, MovieCast, MoviePoster, MovieView,
+    Theater, Screen, ShowTime, Seat, Booking, BookingOrder, PaymentTransaction,
+    Review, ReviewReport, SeatReservation,
 )
 
 
@@ -93,8 +94,9 @@ class MovieAdmin(admin.ModelAdmin):
 
 @admin.register(Theater)
 class TheaterAdmin(admin.ModelAdmin):
-    list_display = ['name', 'screen_count']
-    search_fields = ['name']
+    list_display = ['name', 'city', 'screen_count']
+    list_filter = ['city']
+    search_fields = ['name', 'city']
     inlines = [ScreenInline]
 
     @admin.display(description='Screens')
@@ -173,9 +175,23 @@ class SeatAdmin(admin.ModelAdmin):
     list_editable = ['seat_type', 'price']
 
 
+@admin.register(BookingOrder)
+class BookingOrderAdmin(admin.ModelAdmin):
+    list_display = ['reference', 'user', 'show_time', 'total_amount', 'status', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['reference', 'user__username']
+
+
+@admin.register(PaymentTransaction)
+class PaymentTransactionAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'show_time', 'amount', 'status', 'provider_payment_id', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['provider_order_id', 'provider_payment_id', 'user__username']
+
+
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ['user', 'seat', 'show_time', 'theater', 'total_price', 'booked_at']
+    list_display = ['user', 'seat', 'show_time', 'theater', 'total_price', 'booked_at', 'booking_order']
     list_filter = ['booked_at', 'show_time__date', 'theater']
     search_fields = ['user__username', 'user__email', 'show_time__movie__name', 'theater__name']
 

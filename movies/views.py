@@ -1,21 +1,24 @@
 import json
 import datetime
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 from django.db import transaction
+from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.contrib.auth.decorators import login_required
-from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from .forms import MovieAvailabilityForm, AdminShowTimeForm
+from .discovery import build_movie_queryset, filter_options, recommended_for_user
+from .analytics import build_dashboard_context, export_analytics_csv
+from .payment_views import create_checkout_for_user
 from .models import (
     Movie, Theater, Screen, ShowTime, Seat, Booking, Review, ReviewReport,
-    SeatReservation, Genre, Language, CastMember, user_has_watched_movie,
+    SeatReservation, Genre, Language, CastMember, MovieView, user_has_watched_movie,
 )
 
 
@@ -24,15 +27,25 @@ from .models import (
 # ---------------------------------------------------------------------------
 
 def movie_list(request):
-    search_query = request.GET.get('search')
     today = timezone.localdate()
-    movies = Movie.objects.all()
-    if search_query:
-        movies = movies.filter(name__icontains=search_query)
-    else:
-        # Hide movies whose theatrical run has ended from the default browse list
-        movies = movies.filter(Q(end_date__isnull=True) | Q(end_date__gte=today))
-    return render(request, 'movies/movie_list.html', {'movies': movies, 'today': today})
+    movies_qs = build_movie_queryset(request)
+    match_count = movies_qs.count()
+    paginator = Paginator(movies_qs, 12)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    recommended = recommended_for_user(request.user) if request.user.is_authenticated else []
+    opts = filter_options()
+    return render(request, 'movies/movie_list.html', {
+        'movies': page_obj.object_list,
+        'page_obj': page_obj,
+        'match_count': match_count,
+        'today': today,
+        'recommended_movies': recommended,
+        'filter_genres': opts['genres'],
+        'filter_languages': opts['languages'],
+        'filter_theaters': opts['theaters'],
+        'filter_cities': opts['cities'],
+        'current_filters': request.GET,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +148,8 @@ def _theaters_payload_from_showtimes(showtimes_qs):
 def theater_list(request, movie_id):
     """Movie detail page: trailer, cast, date-wise showtimes, reviews, and recommendations."""
     movie = get_object_or_404(Movie, id=movie_id)
+    if request.user.is_authenticated:
+        MovieView.objects.update_or_create(user=request.user, movie=movie, defaults={})
     reviews = movie.reviews.filter(is_hidden=False).select_related('user').all()
     avg_rating = movie.average_rating
 
@@ -575,68 +590,8 @@ def book_seats(request, showtime_id):
                 'error_message': msg
             })
 
-        booked_seat_numbers = []
-        total_order_price = 0
-
         try:
-            with transaction.atomic():
-                SeatReservation.cleanup_expired(show_time=show_time)
-
-                locked_seats = list(
-                    Seat.objects.select_for_update().filter(id__in=selected_seat_ids, screen=show_time.screen)
-                )
-
-                if len(locked_seats) != len(selected_seat_ids):
-                    raise ValueError('One or more selected seats were not found.')
-
-                # Re-fetch booked seat IDs inside atomic block
-                booked_ids_now = set(
-                    Booking.objects.filter(show_time=show_time).values_list('seat_id', flat=True)
-                )
-                already_booked = [s.seat_number for s in locked_seats if s.id in booked_ids_now]
-                if already_booked:
-                    raise ValueError(f"The following seat(s) are already booked: {', '.join(already_booked)}")
-
-                other_holds = SeatReservation.objects.select_for_update().filter(
-                    show_time=show_time,
-                    status='HELD',
-                    expires_at__gt=timezone.now(),
-                    seats__in=locked_seats
-                ).exclude(user=request.user).distinct()
-
-                if other_holds.exists():
-                    raise ValueError("One or more selected seats are temporarily reserved by another user.")
-
-                user_res = SeatReservation.objects.select_for_update().filter(
-                    show_time=show_time,
-                    user=request.user,
-                    status='HELD',
-                    expires_at__gt=timezone.now()
-                ).first()
-
-                if not user_res:
-                    raise ValueError("Your seat hold has expired. Please select and hold seats again before paying.")
-
-                held_ids = set(user_res.seats.values_list('id', flat=True))
-                submitted_ids = set(selected_seat_ids)
-                if held_ids != submitted_ids:
-                    raise ValueError("Submitted seats do not match your held reservation. Please refresh and try again.")
-
-                for seat in locked_seats:
-                    Booking.objects.create(
-                        user=request.user,
-                        seat=seat,
-                        show_time=show_time,
-                        theater=show_time.theater,
-                        movie=show_time.movie,
-                        total_price=seat.price,
-                    )
-                    booked_seat_numbers.append(seat.seat_number)
-                    total_order_price += float(seat.price)
-
-                user_res.status = 'COMPLETED'
-                user_res.save(update_fields=['status'])
-
+            payment_txn, checkout = create_checkout_for_user(request.user, show_time, selected_seat_ids)
         except ValueError as e:
             error_msg = str(e)
             if is_ajax:
@@ -648,40 +603,26 @@ def book_seats(request, showtime_id):
                 'error_message': error_msg
             })
 
-        if booked_seat_numbers and request.user.email:
-            send_mail(
-                subject=f'Booking confirmed: {show_time.movie.name}',
-                message=(
-                    f"Hi {request.user.username},\n\n"
-                    f"Your booking is confirmed.\n\n"
-                    f"Movie: {show_time.movie.name}\n"
-                    f"Theater: {show_time.theater.name}\n"
-                    f"Screen: {show_time.screen.name}\n"
-                    f"Date: {show_time.date}\n"
-                    f"Time: {show_time.start_time.strftime('%I:%M %p')}\n"
-                    f"Seats: {', '.join(booked_seat_numbers)}\n"
-                    f"Total Paid: \u20b9{total_order_price:.2f}\n\n"
-                    f"Enjoy the show!"
-                ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[request.user.email],
-                fail_silently=True,
-            )
-
-        messages.success(request, f'Booking confirmed for {len(booked_seat_numbers)} seat(s)! A confirmation email has been sent.')
         if is_ajax:
             return JsonResponse({
                 'success': True,
-                'message': f'Booking confirmed! Total: \u20b9{total_order_price:.2f}',
-                'redirect_url': '/user/profile/'
+                'requires_payment': True,
+                'checkout': checkout,
+                'payment_transaction_id': payment_txn.id,
+                'amount_display': float(payment_txn.amount),
             })
 
-        return redirect('profile')
+        messages.info(request, 'Complete payment to confirm your booking.')
+        return redirect('book_seats', showtime_id=show_time.id)
+
+    from .payments import razorpay_enabled
 
     return render(request, 'movies/seat_selection.html', {
         'show_time': show_time,
         'seats': seats,
         'booked_seat_ids': booked_seat_ids,
+        'razorpay_enabled': razorpay_enabled(),
+        'razorpay_key_id': getattr(settings, 'RAZORPAY_KEY_ID', ''),
     })
 
 
@@ -716,6 +657,14 @@ def admin_dashboard(request):
         messages.error(request, "Access restricted to administrators.")
         return redirect('movie_list')
 
+    if request.GET.get('export') == 'csv':
+        csv_data = export_analytics_csv(request.GET)
+        response = HttpResponse(csv_data, content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="bookmyseat-analytics.csv"'
+        return response
+
+    analytics = build_dashboard_context(request.GET)
+
     total_movies = Movie.objects.count()
     total_genres = Genre.objects.count()
     total_languages = Language.objects.count()
@@ -735,6 +684,7 @@ def admin_dashboard(request):
     ).order_by('-date', '-start_time')[:10]
 
     return render(request, 'movies/admin_dashboard.html', {
+        'analytics': analytics,
         'total_movies': total_movies,
         'total_genres': total_genres,
         'total_languages': total_languages,

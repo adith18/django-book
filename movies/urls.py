@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import payment_views
 
 urlpatterns = [
     path('', views.movie_list, name='movie_list'),
@@ -14,6 +15,12 @@ urlpatterns = [
     path('showtime/<int:showtime_id>/seats/release/', views.release_reservation, name='release_reservation'),
     path('showtime/<int:showtime_id>/seats/summary/', views.api_reservation_summary, name='api_reservation_summary'),
     path('showtime/<int:showtime_id>/seats/book/', views.book_seats, name='book_seats'),
+    path('showtime/<int:showtime_id>/payment/initiate/', payment_views.initiate_payment, name='initiate_payment'),
+    path('payment/<int:payment_id>/verify/', payment_views.verify_payment, name='verify_payment'),
+    path('payment/<int:payment_id>/verify-mock/', payment_views.verify_mock_payment, name='verify_mock_payment'),
+    path('payment/<int:payment_id>/failed/', payment_views.payment_failed, name='payment_failed'),
+    path('payment/webhook/razorpay/', payment_views.razorpay_webhook, name='razorpay_webhook'),
+    path('ticket/<int:order_id>/download/', payment_views.download_ticket, name='download_ticket'),
 
     path('booking/<int:booking_id>/cancel/', views.cancel_booking, name='cancel_booking'),
     path('review/<int:review_id>/report/', views.report_review, name='report_review'),

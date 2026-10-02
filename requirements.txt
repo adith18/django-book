@@ -6,3 +6,8 @@ sqlparse==0.5.1
 typing_extensions==4.12.2
 whitenoise==6.7.0
 python-dotenv==1.0.1
+celery==5.4.0
+razorpay==1.4.2
+reportlab==4.2.5
+qrcode[pil]==8.0
+redis==5.2.1

@@ -4,7 +4,7 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import login, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from movies.models import Movie,Booking
+from movies.models import Movie, Booking, BookingOrder, PaymentTransaction
 
 def home(request):
     movies = Movie.objects.all()
@@ -37,7 +37,11 @@ def login_view(request):
 
 @login_required
 def profile(request):
-    bookings = Booking.objects.filter(user=request.user)
+    bookings = Booking.objects.filter(user=request.user).select_related(
+        'movie', 'theater', 'seat', 'show_time', 'booking_order'
+    ).order_by('-booked_at')
+    booking_orders = BookingOrder.objects.filter(user=request.user).prefetch_related('bookings').order_by('-created_at')[:20]
+    payments = PaymentTransaction.objects.filter(user=request.user).order_by('-created_at')[:30]
     if request.method == 'POST':
         u_form = UserUpdateForm(request.POST, instance=request.user)  # fixed
         if u_form.is_valid():  
@@ -45,7 +49,12 @@ def profile(request):
             return redirect('profile')
     else:
         u_form = UserUpdateForm(instance=request.user)
-    return render(request, 'users/profile.html', {'u_form': u_form,'bookings': bookings})
+    return render(request, 'users/profile.html', {
+        'u_form': u_form,
+        'bookings': bookings,
+        'booking_orders': booking_orders,
+        'payments': payments,
+    })
 
 
 @login_required

@@ -46,12 +46,50 @@
         </div>
       </div>
       
+      <div class="card shadow mb-4">
+        <div class="card-header bg-dark text-white">
+          <h4 class="mb-0"><i class="fas fa-receipt me-2"></i> Payment History</h4>
+        </div>
+        <div class="card-body p-0">
+          {% if payments %}
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead><tr><th>Date</th><th>Amount</th><th>Status</th><th>Transaction ID</th></tr></thead>
+              <tbody>
+                {% for p in payments %}
+                <tr>
+                  <td>{{ p.created_at|date:"M d, Y H:i" }}</td>
+                  <td>₹{{ p.amount }}</td>
+                  <td>{{ p.get_status_display }}</td>
+                  <td><small>{{ p.provider_payment_id|default:p.provider_order_id|default:"—" }}</small></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="p-3 text-muted mb-0">No payments yet.</p>
+          {% endif %}
+        </div>
+      </div>
+
       <!-- Bookings Card -->
       <div class="card shadow">
         <div class="card-header bg-success text-white">
           <h4 class="mb-0"><i class="fas fa-ticket-alt me-2"> </i> Your Bookings</h4>
         </div>
         <div class="card-body">
+          {% if booking_orders %}
+          <h6 class="text-muted">Download tickets</h6>
+          <ul class="list-group mb-4">
+            {% for order in booking_orders %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>{{ order.show_time.movie.name }} · {{ order.reference }} · ₹{{ order.total_amount }}</span>
+              <a href="{% url 'download_ticket' order.id %}" class="btn btn-sm btn-outline-primary">PDF Ticket</a>
+            </li>
+            {% endfor %}
+          </ul>
+          {% endif %}
           {% if bookings %}
             <div class="row row-cols-1 row-cols-md-2 g-4">
               {% for booking in bookings %}

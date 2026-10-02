@@ -221,6 +221,7 @@ class MoviePoster(models.Model):
 class Theater(models.Model):
     """Represents a physical cinema venue/location."""
     name = models.CharField(max_length=250)
+    city = models.CharField(max_length=120, blank=True, default='', db_index=True)
 
     class Meta:
         ordering = ['name']
@@ -469,14 +470,88 @@ class SeatReservation(models.Model):
         return f"Reservation #{self.id} by {self.user.username} for {self.show_time}"
 
 
+class BookingOrder(models.Model):
+    class Status(models.TextChoices):
+        CONFIRMED = 'CONFIRMED', 'Confirmed'
+        CANCELLED = 'CANCELLED', 'Cancelled'
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='booking_orders')
+    show_time = models.ForeignKey(ShowTime, on_delete=models.CASCADE, related_name='booking_orders')
+    reference = models.CharField(max_length=64, unique=True, db_index=True)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.CONFIRMED, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f'Order {self.reference}'
+
+
+class PaymentTransaction(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        SUCCESS = 'SUCCESS', 'Success'
+        FAILED = 'FAILED', 'Failed'
+        CANCELLED = 'CANCELLED', 'Cancelled'
+        REFUNDED = 'REFUNDED', 'Refunded'
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
+    show_time = models.ForeignKey(ShowTime, on_delete=models.CASCADE, related_name='payments')
+    reservation = models.ForeignKey(
+        SeatReservation, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments'
+    )
+    seat_ids = models.JSONField(default=list, help_text='Seat primary keys included in this checkout')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=8, default='INR')
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    provider = models.CharField(max_length=32, default='razorpay')
+    provider_order_id = models.CharField(max_length=128, blank=True, db_index=True)
+    provider_payment_id = models.CharField(max_length=128, blank=True, null=True, unique=True)
+    idempotency_key = models.CharField(max_length=64, unique=True)
+    failure_reason = models.CharField(max_length=500, blank=True)
+    booking_order = models.ForeignKey(
+        BookingOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name='payment_transactions'
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['user', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f'Payment #{self.id} ({self.status})'
+
+
 class Booking(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     seat = models.ForeignKey(Seat, on_delete=models.CASCADE, null=True, blank=True)
     show_time = models.ForeignKey(ShowTime, on_delete=models.CASCADE, related_name='bookings', null=True, blank=True)
     theater = models.ForeignKey(Theater, on_delete=models.CASCADE, null=True, blank=True)
-    booked_at = models.DateTimeField(auto_now_add=True)
+    booked_at = models.DateTimeField(auto_now_add=True, db_index=True)
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE, null=True, blank=True)
     total_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    booking_order = models.ForeignKey(
+        BookingOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name='bookings'
+    )
+    payment_transaction = models.ForeignKey(
+        PaymentTransaction, on_delete=models.SET_NULL, null=True, blank=True, related_name='bookings'
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['show_time', 'seat']),
+            models.Index(fields=['user', '-booked_at']),
+            models.Index(fields=['theater', 'booked_at']),
+        ]
 
     def __str__(self):
         return f'Booking by {self.user.username} for {self.seat.seat_number} at {self.show_time}'
@@ -546,3 +621,20 @@ class ReviewReport(models.Model):
 
     def __str__(self):
         return f'Report on review #{self.review_id} by {self.reported_by.username}'
+
+
+class MovieView(models.Model):
+    """Tracks recently viewed movies for personalized recommendations."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='movie_views')
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='views')
+    viewed_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        ordering = ['-viewed_at']
+        unique_together = ('user', 'movie')
+        indexes = [
+            models.Index(fields=['user', '-viewed_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.user.username} viewed {self.movie.name}'
