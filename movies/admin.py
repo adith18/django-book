@@ -67,8 +67,9 @@ class CastMemberAdmin(admin.ModelAdmin):
 @admin.register(Movie)
 class MovieAdmin(admin.ModelAdmin):
     list_display = ['name', 'language', 'age_certification', 'duration_minutes',
-                    'release_date', 'end_date', 'rating', 'is_active', 'created_at']
-    list_filter = ['language', 'genres', 'age_certification', 'release_date', 'end_date']
+                    'release_date', 'end_date', 'rating', 'booking_enabled', 'is_active', 'created_at']
+    list_filter = ['language', 'genres', 'age_certification', 'release_date', 'end_date', 'booking_enabled']
+    list_editable = ['booking_enabled']
     search_fields = ['name', 'description']
     inlines = [MoviePosterInline, MovieCastInline, MovieShowTimeInline]
     filter_horizontal = ['genres']
@@ -80,10 +81,14 @@ class MovieAdmin(admin.ModelAdmin):
         }),
         ('Availability', {
             'fields': [
-                'release_date', 'end_date', 'default_cleaning_buffer_minutes',
+                'booking_enabled', 'release_date', 'end_date', 'default_cleaning_buffer_minutes',
                 'is_active', 'run_ended',
             ],
-            'description': 'Available from/until dates control when customers can book. Use the custom admin scheduler for date-wise showtimes.',
+            'description': (
+                'Uncheck "booking_enabled" to immediately block bookings and new showtime '
+                'scheduling for this movie. "end_date" is shown to customers but no longer '
+                'auto-blocks bookings once it passes — booking_enabled is now the real switch.'
+            ),
         }),
     ]
 

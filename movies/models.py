@@ -113,6 +113,14 @@ class Movie(models.Model):
         default=30,
         help_text='Default buffer/cleaning time between shows (minutes) for new showtimes',
     )
+    booking_enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            'Master switch for this movie\'s bookings. Uncheck to immediately block '
+            'all new bookings and showtime scheduling, regardless of release/end dates. '
+            'A passed "end_date" alone no longer blocks bookings — toggle this off instead.'
+        ),
+    )
     created_at = models.DateTimeField(default=timezone.now, editable=False)
 
     class Meta:
@@ -159,29 +167,53 @@ class Movie(models.Model):
 
     @property
     def is_active(self):
-        """True when today falls within the movie's theatrical run."""
+        """True when the movie is currently bookable.
+
+        `booking_enabled` is the authoritative admin switch. `release_date`
+        still blocks booking before launch, but `end_date` is informational
+        only — it no longer auto-blocks bookings once it passes (see
+        `get_booking_dates`), so a stale end date can't silently strand
+        the admin or customers. To close bookings, turn `booking_enabled` off.
+        """
+        if not self.booking_enabled:
+            return False
         today = timezone.localdate()
         if self.release_date and today < self.release_date:
-            return False
-        if self.end_date and today > self.end_date:
             return False
         return True
 
     @property
     def run_ended(self):
-        """True when the theatrical run has passed."""
-        if self.end_date:
-            return timezone.localdate() > self.end_date
-        return False
+        """True when bookings are closed for this movie.
+
+        This now reflects the admin's manual `booking_enabled` switch rather
+        than `end_date` alone, so admin can keep a movie bookable past its
+        originally announced end date (or close it early) without touching
+        the date fields.
+        """
+        return not self.booking_enabled
 
     def get_booking_dates(self):
-        """Return list of dates from release_date to end_date (future-only window)."""
-        today = timezone.localdate()
-        start = self.release_date or today
-        end = self.end_date or today
-        if end < today:
+        """Rolling window of bookable dates, used both for the customer date
+        picker and for the admin showtime-scheduling form.
+
+        Gated solely by `booking_enabled`. If `end_date` is set and still in
+        the future, it's respected as the cutoff (admin's deliberate choice).
+        If `end_date` is missing or has already passed, we fall back to a
+        rolling 30-day window instead of returning an empty list — a passed
+        end_date should never be the reason new showtimes can't be added.
+        """
+        if not self.booking_enabled:
             return []
-        start = max(start, today)
+        today = timezone.localdate()
+        start = max(self.release_date or today, today)
+        rolling_window_end = today + datetime.timedelta(days=30)
+        if self.end_date and self.end_date >= today:
+            end = self.end_date
+        else:
+            end = rolling_window_end
+        if end < start:
+            return []
         dates = []
         current = start
         while current <= end:
@@ -377,13 +409,28 @@ class ShowTime(models.Model):
             raise ValidationError({'screen': 'Selected screen does not belong to the chosen theater.'})
         if self.movie_id and self.date:
             movie = self.movie
+            if not movie.booking_enabled:
+                raise ValidationError({
+                    'date': (
+                        'Bookings/scheduling for this movie are currently disabled by the admin. '
+                        'Enable "booking_enabled" on the movie to schedule showtimes.'
+                    ),
+                })
             if movie.release_date and self.date < movie.release_date:
                 raise ValidationError({
                     'date': f'Show date cannot be before the movie\'s available-from date ({movie.release_date}).',
                 })
-            if movie.end_date and self.date > movie.end_date:
+            today = timezone.localdate()
+            # Only enforce end_date as a hard cutoff while it's still a deliberate,
+            # not-yet-passed choice. Once it's in the past we don't want it to
+            # permanently block new showtimes — admin can still extend the run by
+            # simply scheduling further dates while booking_enabled stays True.
+            if movie.end_date and movie.end_date >= today and self.date > movie.end_date:
                 raise ValidationError({
-                    'date': f'Show date cannot be after the movie\'s available-until date ({movie.end_date}).',
+                    'date': (
+                        f'Show date cannot be after the movie\'s available-until date ({movie.end_date}). '
+                        'Update or clear the movie\'s end date to schedule beyond it.'
+                    ),
                 })
         if not self.screen_id or not self.date or not self.start_time:
             return
