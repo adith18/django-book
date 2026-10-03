@@ -635,7 +635,7 @@
           const bookable = st.bookable !== undefined
             ? st.bookable
             : (st.status === 'Available' || st.status === 'Almost Full');
-          const href     = bookable ? BOOK_URL_TPL.replace('__ID__', st.id) : 'javascript:void(0)';
+          const href     = bookable ? BOOK_URL_TPL.replace('999999', st.id) : 'javascript:void(0)';
 
           html += `<a href="${href}" class="time-btn ${btnCls}" title="${escHtml(st.screen)} — ${escHtml(st.screen_type)}">
             <span class="t-time">${escHtml(range)}</span>

@@ -1,0 +1,22 @@
+{% extends "users/base.html" %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+<p>
+  Screen capacity: <strong>{{ screen.total_seats }}</strong> seats total.
+  Currently has <strong>{{ existing_count }}</strong> seat(s) created.
+  <strong>{{ remaining }}</strong> seat(s) remaining within capacity.
+</p>
+
+<form method="post">
+  {% csrf_token %}
+  <table>
+    {{ form.as_table }}
+  </table>
+  <p>
+    <input type="submit" value="Create Seats" class="default">
+    <a href="{% url 'admin:movies_screen_change' screen.id %}" style="margin-left:10px;">Cancel</a>
+  </p>
+</form>
+{% endblock %}

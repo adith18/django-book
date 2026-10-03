@@ -1,10 +1,31 @@
+from django import forms
 from django.contrib import admin
+from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import path, reverse
+from django.utils.html import format_html
 from .models import (
     Genre, Language, CastMember, Movie, MovieCast, MoviePoster, MovieView,
     Theater, Screen, ShowTime, Seat, Booking, BookingOrder, PaymentTransaction,
     Review, ReviewReport, SeatReservation,
 )
 
+
+class BulkSeatForm(forms.Form):
+    row_label = forms.CharField(
+        max_length=5,
+        help_text='Prefix for the seat numbers, e.g. "A" → A1, A2, A3… or "VIP" → VIP1, VIP2…',
+    )
+    start_number = forms.IntegerField(min_value=1, label='From seat number')
+    end_number = forms.IntegerField(min_value=1, label='To seat number')
+    seat_type = forms.ChoiceField(choices=Seat.SEAT_TYPE_CHOICES)
+    price = forms.DecimalField(max_digits=8, decimal_places=2, initial=150.00)
+
+    def clean(self):
+        cleaned = super().clean()
+        start, end = cleaned.get('start_number'), cleaned.get('end_number')
+        if start and end and end < start:
+            raise forms.ValidationError('"To seat number" must be greater than or equal to "From seat number".')
+        return cleaned
 
 class MoviePosterInline(admin.TabularInline):
     model = MoviePoster
@@ -111,7 +132,7 @@ class TheaterAdmin(admin.ModelAdmin):
 
 @admin.register(Screen)
 class ScreenAdmin(admin.ModelAdmin):
-    list_display = ['name', 'theater', 'screen_type', 'total_seats', 'seat_count']
+    list_display = ['name', 'theater', 'screen_type', 'total_seats', 'seat_count', 'bulk_add_link']
     list_filter = ['theater', 'screen_type']
     search_fields = ['name', 'theater__name']
     inlines = [SeatInline]
@@ -119,6 +140,74 @@ class ScreenAdmin(admin.ModelAdmin):
     @admin.display(description='Seats in DB')
     def seat_count(self, obj):
         return obj.seats.count()
+
+    @admin.display(description='Add Seats')
+    def bulk_add_link(self, obj):
+        url = reverse('admin:movies_screen_bulk_add_seats', args=[obj.id])
+        return format_html('<a class="button" href="{}">Bulk Add Seats</a>', url)
+
+    def get_urls(self):
+        custom_urls = [
+            path(
+                '<int:screen_id>/bulk-add-seats/',
+                self.admin_site.admin_view(self.bulk_add_seats_view),
+                name='movies_screen_bulk_add_seats',
+            ),
+        ]
+        return custom_urls + super().get_urls()
+
+    def bulk_add_seats_view(self, request, screen_id):
+        screen = get_object_or_404(Screen, pk=screen_id)
+        existing_count = screen.seats.count()
+        remaining = max(0, screen.total_seats - existing_count)
+
+        if request.method == 'POST':
+            form = BulkSeatForm(request.POST)
+            if form.is_valid():
+                row_label = form.cleaned_data['row_label'].strip().upper()
+                start = form.cleaned_data['start_number']
+                end = form.cleaned_data['end_number']
+                seat_type = form.cleaned_data['seat_type']
+                price = form.cleaned_data['price']
+                requested_count = end - start + 1
+
+                if requested_count > remaining:
+                    form.add_error(
+                        None,
+                        f'This would add {requested_count} seat(s), but this screen has capacity for only '
+                        f'{remaining} more seat(s) (total_seats = {screen.total_seats}, '
+                        f'{existing_count} already exist). Increase the screen\'s total_seats first, '
+                        f'or reduce the range.',
+                    )
+                else:
+                    created, skipped = 0, []
+                    for n in range(start, end + 1):
+                        seat_number = f'{row_label}{n}'
+                        _, was_created = Seat.objects.get_or_create(
+                            screen=screen,
+                            seat_number=seat_number,
+                            defaults={'seat_type': seat_type, 'price': price},
+                        )
+                        created += 1 if was_created else 0
+                        if not was_created:
+                            skipped.append(seat_number)
+
+                    message = f'Created {created} seat(s) for {screen}.'
+                    if skipped:
+                        message += f' Skipped {len(skipped)} seat(s) that already existed: {", ".join(skipped)}.'
+                    self.message_user(request, message)
+                    return redirect(reverse('admin:movies_screen_change', args=[screen.id]))
+        else:
+            form = BulkSeatForm()
+
+        return render(request, 'admin/movies/bulk_add_seats.html', {
+            'form': form,
+            'screen': screen,
+            'existing_count': existing_count,
+            'remaining': remaining,
+            'opts': self.model._meta,
+            'title': f'Bulk add seats — {screen}',
+        })
 
 
 @admin.register(ShowTime)
