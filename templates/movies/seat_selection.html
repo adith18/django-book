@@ -380,16 +380,21 @@ document.addEventListener('DOMContentLoaded', function () {
     fetchSeatStatus();
   }
 
+  /* ─── Parse "B12" into { row: "B", num: 12 } ─── */
+  function parseSeatNumber(seatNumber) {
+    const match = String(seatNumber).match(/^([A-Za-z]+)(\d+)$/);
+    if (match) {
+      return { row: match[1].toUpperCase(), num: parseInt(match[2], 10) };
+    }
+    return { row: '?', num: 0 }; // fallback for seat numbers with no letter prefix
+  }
+
   /* ─── Build Seat Grid ─── */
   function buildGrid(seats) {
-    // Sort: premium first, then standard; within each group sort by seat_number
-    const premium  = seats.filter(s => s.seat_type === 'premium')
-                          .sort((a,b) => a.seat_number.localeCompare(b.seat_number, undefined, {numeric:true}));
-    const standard = seats.filter(s => s.seat_type === 'standard')
-                          .sort((a,b) => a.seat_number.localeCompare(b.seat_number, undefined, {numeric:true}));
+    const premium  = seats.filter(s => s.seat_type === 'premium');
+    const standard = seats.filter(s => s.seat_type === 'standard');
 
     seatGrid.innerHTML = '';
-    const COLS = 10;
 
     function renderSection(list, label) {
       if (!list.length) return;
@@ -398,19 +403,30 @@ document.addEventListener('DOMContentLoaded', function () {
       sep.textContent = label;
       seatGrid.appendChild(sep);
 
-      for (let r = 0; r < Math.ceil(list.length / COLS); r++) {
+      // Group by the seat's ACTUAL row letter (parsed from its seat_number)
+      const rows = {};
+      list.forEach(seat => {
+        const parsed = parseSeatNumber(seat.seat_number);
+        if (!rows[parsed.row]) rows[parsed.row] = [];
+        rows[parsed.row].push(Object.assign({}, seat, { _num: parsed.num }));
+      });
+
+      // Real row letters, alphabetical; seats within a row, numeric order
+      Object.keys(rows).sort().forEach(rowLetter => {
+        const rowSeatsSorted = rows[rowLetter].sort((a, b) => a._num - b._num);
+
         const rowEl = document.createElement('div');
         rowEl.className = 'seat-row';
 
         const rowLabel = document.createElement('span');
         rowLabel.className = 'row-label';
-        rowLabel.textContent = String.fromCharCode(65 + r); // A, B, C …
+        rowLabel.textContent = rowLetter;
         rowEl.appendChild(rowLabel);
 
-        const rowSeats = document.createElement('div');
-        rowSeats.className = 'row-seats';
+        const rowSeatsEl = document.createElement('div');
+        rowSeatsEl.className = 'row-seats';
 
-        list.slice(r * COLS, (r + 1) * COLS).forEach(seat => {
+        rowSeatsSorted.forEach(seat => {
           const box = document.createElement('div');
           box.id        = `seat-box-${seat.id}`;
           box.className = `seat-box ${seatClass(seat)}`;
@@ -425,18 +441,17 @@ document.addEventListener('DOMContentLoaded', function () {
           } else {
             box.addEventListener('click', () => onSeatClick(seat, box));
           }
-          rowSeats.appendChild(box);
+          rowSeatsEl.appendChild(box);
         });
 
-        rowEl.appendChild(rowSeats);
+        rowEl.appendChild(rowSeatsEl);
         seatGrid.appendChild(rowEl);
-      }
+      });
     }
 
     renderSection(premium, 'Premium');
     renderSection(standard, 'Standard');
   }
-
   function seatClass(seat) {
     if (seat.status === 'BOOKED') return 'seat-sold';
     if (seat.status === 'RESERVED') return 'seat-reserved-other';
