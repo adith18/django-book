@@ -30,9 +30,11 @@ urlpatterns = [
     path('custom-admin/movie/<int:movie_id>/schedule/', views.admin_movie_schedule, name='admin_movie_schedule_edit'),
     path('custom-admin/api/screens/', views.admin_api_screens, name='admin_api_screens'),
     path('custom-admin/api/movie/<int:movie_id>/showtimes/', views.admin_api_movie_showtimes, name='admin_api_movie_showtimes'),
+    path('custom-admin/api/movie/<int:movie_id>/showtime/bulk-add-range/', views.admin_api_showtime_bulk_add_range, name='admin_api_showtime_bulk_add_range'),
     path('custom-admin/api/movie/<int:movie_id>/showtime/add/', views.admin_api_showtime_add, name='admin_api_showtime_add'),
     path('custom-admin/api/showtime/<int:showtime_id>/update/', views.admin_api_showtime_update, name='admin_api_showtime_update'),
     path('custom-admin/api/showtime/<int:showtime_id>/delete/', views.admin_api_showtime_delete, name='admin_api_showtime_delete'),
+    path('custom-admin/api/movie/<int:movie_id>/showtime/bulk-add/', views.admin_api_showtime_bulk_add, name='admin_api_showtime_bulk_add'),
     path('custom-admin/api/movie/<int:movie_id>/copy-schedule/', views.admin_api_copy_schedule, name='admin_api_copy_schedule'),
     path('custom-admin/review/<int:review_id>/moderate/', views.moderate_review, name='moderate_review'),
 ]

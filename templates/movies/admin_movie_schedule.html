@@ -201,11 +201,47 @@
         {% elif not schedule_dates %}
         <p class="text-muted">Set available from/until dates and save to generate the date list.</p>
         {% else %}
-        <p class="small text-muted">
+                <p class="small text-muted">
           Each date can have its own times.
           End times are calculated automatically from <strong>duration + buffer</strong>.
           Overlapping shows on the same screen are blocked.
         </p>
+
+        <div class="schedule-card" style="background:#fff8f0; border:1px dashed #ffb86b; margin-bottom:16px; padding:16px;">
+          <h6 class="fw-bold mb-2"><i class="fas fa-calendar-week text-warning me-1"></i>Multi-day quick fill</h6>
+          <p class="small text-muted mb-2">
+            Add several shows per day across a date range, auto-spaced back-to-back using this movie's runtime + buffer.
+            Uses the default theater/screen selected on the left.
+          </p>
+          <div class="row g-2 align-items-end">
+            <div class="col-6 col-md-3">
+              <label class="small mb-1 d-block">From date</label>
+              <input type="date" id="rangeFrom" class="form-control form-control-sm"
+                     min="{{ movie.release_date|date:'Y-m-d' }}" max="{{ movie.end_date|date:'Y-m-d' }}"
+                     value="{{ movie.release_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="small mb-1 d-block">To date</label>
+              <input type="date" id="rangeTo" class="form-control form-control-sm"
+                     min="{{ movie.release_date|date:'Y-m-d' }}" max="{{ movie.end_date|date:'Y-m-d' }}"
+                     value="{{ movie.end_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="small mb-1 d-block">First show at</label>
+              <input type="time" id="rangeFirstStart" class="form-control form-control-sm" value="10:00">
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="small mb-1 d-block">Shows/day</label>
+              <input type="number" id="rangeShowsPerDay" class="form-control form-control-sm" value="4" min="1" max="12">
+            </div>
+            <div class="col-12 col-md-2">
+              <button type="button" id="btnRangeFill" class="btn btn-sm btn-warning w-100">
+                <i class="fas fa-bolt me-1"></i>Generate shows
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div id="scheduleAlerts"></div>
         <div id="scheduleContainer"></div>
         {% endif %}
@@ -266,6 +302,62 @@
 
   const addUrl    = "{% url 'admin_api_showtime_add' movie.id %}";
   const copyUrl   = "{% url 'admin_api_copy_schedule' movie.id %}";
+  const bulkAddUrl = "{% url 'admin_api_showtime_bulk_add' movie.id %}";
+  const bulkAddRangeUrl = "{% url 'admin_api_showtime_bulk_add_range' movie.id %}";
+
+  const btnRangeFill = document.getElementById('btnRangeFill');
+  if (btnRangeFill) {
+    btnRangeFill.addEventListener('click', function () {
+      if (!defaultTheater.value || !defaultScreen.value) {
+        alertMsg('Select a default theater and screen on the left before generating shows.', 'warning');
+        return;
+      }
+      const dateFrom = document.getElementById('rangeFrom').value;
+      const dateTo = document.getElementById('rangeTo').value;
+      const firstStart = document.getElementById('rangeFirstStart').value;
+      const showsPerDay = document.getElementById('rangeShowsPerDay').value;
+
+      if (!dateFrom || !dateTo || !firstStart || !showsPerDay) {
+        alertMsg('Fill in from date, to date, first show time, and shows per day.', 'warning');
+        return;
+      }
+
+      btnRangeFill.disabled = true;
+      btnRangeFill.innerHTML = '<span class="spinner-border spinner-border-sm mr-1"></span> Generating…';
+
+      fetch(bulkAddRangeUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+        body: JSON.stringify({
+          theater_id: defaultTheater.value,
+          screen_id: defaultScreen.value,
+          date_from: dateFrom,
+          date_to: dateTo,
+          first_start_time: firstStart,
+          shows_per_day: showsPerDay,
+          cleaning_buffer_minutes: DEFAULT_BUFFER,
+        }),
+      }).then(r => r.json()).then(data => {
+        btnRangeFill.disabled = false;
+        btnRangeFill.innerHTML = '<i class="fas fa-bolt me-1"></i>Generate shows';
+        if (!data.success) { alertMsg(data.error || 'Could not generate shows.', 'danger'); return; }
+        data.created.forEach(st => {
+          const key = st.date;
+          showtimesByDate[key] = showtimesByDate[key] || [];
+          showtimesByDate[key].push(st);
+          showtimesByDate[key].sort((a, b) => a.start_time.localeCompare(b.start_time));
+        });
+        render();
+        let msg = `Generated ${data.created.length} show(s) across ${dateFrom} → ${dateTo}.`;
+        if (data.warnings && data.warnings.length) msg += ` ${data.warnings.length} slot(s) skipped (conflicts).`;
+        alertMsg(msg, data.warnings && data.warnings.length ? 'warning' : 'success');
+      }).catch(() => {
+        btnRangeFill.disabled = false;
+        btnRangeFill.innerHTML = '<i class="fas fa-bolt me-1"></i>Generate shows';
+        alertMsg('Network error while generating shows.', 'danger');
+      });
+    });
+  }
   const screensUrl = "{% url 'admin_api_screens' %}";
   const csrf = () => document.querySelector('[name=csrfmiddlewaretoken]').value;
 
@@ -371,12 +463,30 @@
           })()
         : '10:00';
 
-      html += `<div class="add-show-bar">
+          html += `<div class="add-show-bar">
         <label class="mb-0 small font-weight-bold">Start:</label>
         <input type="time" class="form-control form-control-sm add-time" style="width:auto;" value="${defaultTime}">
         <span class="endtime-preview unknown add-end-preview" title="Predicted end time (movie only, no buffer)">End: —</span>
         <button type="button" class="btn btn-sm btn-success btn-add-show" data-date="${dateStr}">
           <i class="fas fa-plus me-1"></i>Add show
+        </button>
+      </div>
+      <div class="add-show-bar" style="background:#f0fff4;border-top:1px dashed #b7e4c7;">
+        <label class="mb-0 small font-weight-bold">Multiple times:</label>
+        <input type="text" class="form-control form-control-sm bulk-times" style="width:220px;"
+               placeholder="e.g. 10:00, 13:30, 17:00, 20:30">
+        <button type="button" class="btn btn-sm btn-outline-success btn-bulk-add" data-date="${dateStr}">
+          <i class="fas fa-layer-group me-1"></i>Add all
+        </button>
+        <span class="text-muted" style="font-size:.75rem;">or generate:</span>
+        <input type="time" class="form-control form-control-sm bulk-range-from" style="width:auto;" value="10:00" title="From">
+        <span class="text-muted" style="font-size:.75rem;">to</span>
+        <input type="time" class="form-control form-control-sm bulk-range-to" style="width:auto;" value="22:00" title="To">
+        <span class="text-muted" style="font-size:.75rem;">every</span>
+        <input type="number" class="form-control form-control-sm bulk-range-interval" style="width:70px;" value="180" min="30" step="15" title="Interval (minutes)">
+        <span class="text-muted" style="font-size:.75rem;">min</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary btn-bulk-generate" data-date="${dateStr}">
+          <i class="fas fa-magic me-1"></i>Fill times
         </button>
       </div>
       <div class="copy-bar">
@@ -420,13 +530,82 @@
       };
     });
 
-    // Live end-time preview per add-show bar
+        // Live end-time preview per add-show bar
     document.querySelectorAll('.add-time').forEach(input => {
       input.addEventListener('input', () => updateAddBarPreview(input));
       updateAddBarPreview(input);
     });
+
+    // Bulk add button
+    document.querySelectorAll('.btn-bulk-add').forEach(btn => {
+      btn.onclick = () => {
+        const bar = btn.closest('.add-show-bar');
+        const raw = bar.querySelector('.bulk-times').value;
+        const times = raw.split(/[,\s]+/).map(t => t.trim()).filter(Boolean);
+        if (!times.length) { alertMsg('Enter at least one time, e.g. 10:00, 13:30, 17:00', 'warning'); return; }
+        bulkAddShows(btn.dataset.date, times);
+      };
+    });
+
+    // Bulk generate: fill the times field from a From/To/Interval range
+    document.querySelectorAll('.btn-bulk-generate').forEach(btn => {
+      btn.onclick = () => {
+        const bar = btn.closest('.add-show-bar');
+        const from = bar.querySelector('.bulk-range-from').value;
+        const to = bar.querySelector('.bulk-range-to').value;
+        const interval = parseInt(bar.querySelector('.bulk-range-interval').value, 10) || 180;
+        if (!from || !to) { alertMsg('Set both "from" and "to" times to generate a range.', 'warning'); return; }
+        const times = generateTimeRange(from, to, interval);
+        if (!times.length) { alertMsg('No times generated — check the range and interval.', 'warning'); return; }
+        bar.querySelector('.bulk-times').value = times.join(', ');
+      };
+    });
   }
 
+  function generateTimeRange(fromHHMM, toHHMM, intervalMins) {
+    const [fh, fm] = fromHHMM.split(':').map(Number);
+    const [th, tm] = toHHMM.split(':').map(Number);
+    let startMins = fh * 60 + fm;
+    const endMins = th * 60 + tm;
+    const times = [];
+    while (startMins <= endMins) {
+      const h = Math.floor(startMins / 60) % 24;
+      const m = startMins % 60;
+      times.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+      startMins += intervalMins;
+    }
+    return times;
+  }
+
+  function bulkAddShows(dateStr, times) {
+    if (!defaultTheater.value || !defaultScreen.value) {
+      alertMsg('Select a default theater and screen on the left before adding shows.', 'warning');
+      return;
+    }
+    fetch(bulkAddUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      body: JSON.stringify({
+        theater_id: defaultTheater.value,
+        screen_id: defaultScreen.value,
+        date: dateStr,
+        times: times,
+        cleaning_buffer_minutes: DEFAULT_BUFFER,
+      }),
+    }).then(r => r.json()).then(data => {
+      if (!data.success) { alertMsg(data.error || 'Could not add shows.', 'danger'); return; }
+      data.created.forEach(st => {
+        const key = st.date;
+        showtimesByDate[key] = showtimesByDate[key] || [];
+        showtimesByDate[key].push(st);
+        showtimesByDate[key].sort((a, b) => a.start_time.localeCompare(b.start_time));
+      });
+      render();
+      let msg = `Added ${data.created.length} show(s) on ${dateStr}.`;
+      if (data.warnings && data.warnings.length) msg += ' Skipped: ' + data.warnings.join(' ');
+      alertMsg(msg, data.warnings && data.warnings.length ? 'warning' : 'success');
+    }).catch(() => alertMsg('Network error while adding shows.', 'danger'));
+  }
   function updateAllEndPreviews() {
     document.querySelectorAll('.add-time').forEach(input => updateAddBarPreview(input));
   }

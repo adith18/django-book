@@ -13,6 +13,22 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from .forms import MovieAvailabilityForm, AdminShowTimeForm
+from functools import wraps
+
+
+def ajax_login_required(view_func):
+    """Like @login_required, but returns a JSON 401 instead of redirecting
+    to the login page — fetch() silently follows redirects and chokes on
+    the HTML response, which hides real auth problems from the user."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse(
+                {'success': False, 'error': 'Your session has expired. Please log in again.', 'auth_required': True},
+                status=401,
+            )
+        return view_func(request, *args, **kwargs)
+    return wrapper
 from .discovery import build_movie_queryset, filter_options, recommended_for_user
 from .analytics import build_dashboard_context, export_analytics_csv
 from .payment_views import create_checkout_for_user
@@ -331,7 +347,7 @@ def delete_review(request, review_id):
 # Seat status API
 # ---------------------------------------------------------------------------
 
-@login_required(login_url='login')
+@ajax_login_required
 def api_seat_status(request, showtime_id):
     show_time = get_object_or_404(ShowTime, id=showtime_id)
     # Lazy cleanup of expired reservations
@@ -404,7 +420,7 @@ def api_seat_status(request, showtime_id):
 # Reserve seats
 # ---------------------------------------------------------------------------
 
-@login_required(login_url='login')
+@ajax_login_required
 @require_POST
 def reserve_seats(request, showtime_id):
     show_time = get_object_or_404(ShowTime, id=showtime_id)
@@ -496,7 +512,7 @@ def reserve_seats(request, showtime_id):
 # Release reservation
 # ---------------------------------------------------------------------------
 
-@login_required(login_url='login')
+@ajax_login_required
 @require_POST
 def release_reservation(request, showtime_id):
     show_time = get_object_or_404(ShowTime, id=showtime_id)
@@ -511,7 +527,7 @@ def release_reservation(request, showtime_id):
 # Reservation summary
 # ---------------------------------------------------------------------------
 
-@login_required(login_url='login')
+@ajax_login_required
 def api_reservation_summary(request, showtime_id):
     """Return the current user's active HELD reservation details for the summary panel."""
     show_time = get_object_or_404(ShowTime, id=showtime_id)
@@ -873,6 +889,140 @@ def admin_api_showtime_update(request, showtime_id):
         return JsonResponse({'success': False, 'error': '; '.join(exc.messages)}, status=400)
 
     return JsonResponse({'success': True, 'showtime': _serialize_admin_showtime(showtime)})
+@login_required(login_url='login')
+@require_POST
+def admin_api_showtime_bulk_add(request, movie_id):
+    """Add several showtimes for one date/theater/screen at once.
+    Each time is validated independently — one bad/conflicting time doesn't
+    block the others from being created."""
+    if not _staff_only(request):
+        return JsonResponse({'success': False, 'error': 'Forbidden.'}, status=403)
+    movie = get_object_or_404(Movie, pk=movie_id)
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        data = request.POST
+
+    theater_id = data.get('theater_id')
+    screen_id = data.get('screen_id')
+    show_date = data.get('date')
+    times = data.get('times', [])
+    buffer_mins = data.get('cleaning_buffer_minutes', movie.default_cleaning_buffer_minutes)
+
+    try:
+        show_date_parsed = datetime.date.fromisoformat(show_date)
+        buffer_mins = int(buffer_mins)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'Invalid date or buffer.'}, status=400)
+
+    if not isinstance(times, list) or not times:
+        return JsonResponse({'success': False, 'error': 'Provide at least one start time.'}, status=400)
+
+    created, errors = [], []
+    for time_str in times:
+        time_str = (time_str or '').strip()
+        if not time_str:
+            continue
+        try:
+            start_time_parsed = datetime.datetime.strptime(time_str, '%H:%M').time()
+        except ValueError:
+            errors.append(f'{time_str}: invalid time format (use HH:MM).')
+            continue
+
+        showtime = ShowTime(
+            movie=movie,
+            theater_id=theater_id,
+            screen_id=screen_id,
+            date=show_date_parsed,
+            start_time=start_time_parsed,
+            cleaning_buffer_minutes=buffer_mins,
+        )
+        try:
+            showtime.save()
+            created.append(_serialize_admin_showtime(showtime))
+        except DjangoValidationError as exc:
+            errors.append(f'{time_str}: {"; ".join(exc.messages)}')
+
+    if not created and errors:
+        return JsonResponse({'success': False, 'error': ' '.join(errors)}, status=400)
+
+    return JsonResponse({'success': True, 'created': created, 'warnings': errors})
+@login_required(login_url='login')
+@require_POST
+def admin_api_showtime_bulk_add_range(request, movie_id):
+    """Add N shows/day, auto-spaced back-to-back by movie duration + buffer,
+    across a date range, for one theater/screen."""
+    if not _staff_only(request):
+        return JsonResponse({'success': False, 'error': 'Forbidden.'}, status=403)
+    movie = get_object_or_404(Movie, pk=movie_id)
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        data = request.POST
+
+    theater_id = data.get('theater_id')
+    screen_id = data.get('screen_id')
+    date_from = data.get('date_from')
+    date_to = data.get('date_to')
+    first_start = data.get('first_start_time')
+    shows_per_day = data.get('shows_per_day')
+    buffer_mins = data.get('cleaning_buffer_minutes', movie.default_cleaning_buffer_minutes)
+
+    try:
+        date_from_parsed = datetime.date.fromisoformat(date_from)
+        date_to_parsed = datetime.date.fromisoformat(date_to)
+        first_start_parsed = datetime.datetime.strptime(first_start, '%H:%M').time()
+        shows_per_day = int(shows_per_day)
+        buffer_mins = int(buffer_mins)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'Invalid date range, start time, shows/day, or buffer.'}, status=400)
+
+    if date_to_parsed < date_from_parsed:
+        return JsonResponse({'success': False, 'error': '"To" date must be on or after "From" date.'}, status=400)
+    if shows_per_day < 1 or shows_per_day > 12:
+        return JsonResponse({'success': False, 'error': 'Shows per day must be between 1 and 12.'}, status=400)
+    total_days = (date_to_parsed - date_from_parsed).days + 1
+    if total_days > 90:
+        return JsonResponse({'success': False, 'error': 'Date range too large (max 90 days). Narrow the range and try again.'}, status=400)
+
+    duration = movie.duration_minutes or 120
+    slot_minutes = duration + buffer_mins
+
+    # Compute each day's N start times, back-to-back from first_start
+    day_times = []
+    cursor_minutes = first_start_parsed.hour * 60 + first_start_parsed.minute
+    for _ in range(shows_per_day):
+        h = (cursor_minutes // 60) % 24
+        m = cursor_minutes % 60
+        day_times.append(datetime.time(h, m))
+        cursor_minutes += slot_minutes
+
+    created, errors = [], []
+    current_date = date_from_parsed
+    with transaction.atomic():
+        while current_date <= date_to_parsed:
+            for t in day_times:
+                showtime = ShowTime(
+                    movie=movie,
+                    theater_id=theater_id,
+                    screen_id=screen_id,
+                    date=current_date,
+                    start_time=t,
+                    cleaning_buffer_minutes=buffer_mins,
+                )
+                try:
+                    showtime.save()
+                    created.append(_serialize_admin_showtime(showtime))
+                except DjangoValidationError as exc:
+                    errors.append(f'{current_date} {t.strftime("%H:%M")}: {"; ".join(exc.messages)}')
+            current_date += datetime.timedelta(days=1)
+
+    if not created and errors:
+        shown = '; '.join(errors[:8]) + (' …' if len(errors) > 8 else '')
+        return JsonResponse({'success': False, 'error': shown}, status=400)
+
+    return JsonResponse({'success': True, 'created': created, 'warnings': errors})
+
 
 
 @login_required(login_url='login')
