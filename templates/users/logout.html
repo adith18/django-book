@@ -1,8 +1,101 @@
 {% extends 'users/base.html' %}
 
 {% block content %}
-<div class="container mt-5">
-    <h2>You Have been logged out.</h2>
-    <p>Click<a href="{% url 'login' %}">here</a>to log in again</p>
+<style>
+  .logout-wrapper {
+    min-height: 60vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+  .logout-card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(34, 222, 21, 0);
+    padding: 48px 40px;
+    text-align: center;
+    max-width: 420px;
+    width: 100%;
+  }
+  .logout-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+  }
+  .logout-icon i {
+    color: #fff;
+    font-size: 28px;
+  }
+  .logout-card h2 {
+    font-weight: 800;
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+    color: #bf151e;
+  }
+  .logout-card p {
+    color: #0f1de2;
+    font-size: 0.95rem;
+    margin-bottom: 28px;
+  }
+  .logout-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .btn-logout-primary {
+    background: linear-gradient(135deg, #efefef, #87a2b4fe);
+    color: #0c0c70;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: opacity .15s;
+    display: block;
+  }
+  .btn-logout-primary:hover {
+    opacity: .9;
+    color: #fff;
+  }
+  .btn-logout-secondary {
+    background: #fff;
+     background: linear-gradient(135deg, #efefef, #87a2b4fe);
+    color: #0c0c70;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 10px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: border-color .15s;
+    display: block;
+  }
+  .btn-logout-secondary:hover {
+    border-color: #e5eaed;
+    color: #e4edee;
+  }
+</style>
+
+<div class="logout-wrapper">
+  <div class="logout-card">
+    <div class="logout-icon">
+      <i class="fas fa-check"></i>
     </div>
-  {% endblock %}
+    <h2>You've been logged out</h2>
+    <p>Thanks for visiting BookMySeat. Your session has ended safely.</p>
+    <div class="logout-actions">
+      <a href="{% url 'login' %}" class="btn-logout-primary">
+        <i class="fas fa-sign-in-alt me-1"></i> Log in again
+      </a>
+      <a href="{% url 'movie_list' %}" class="btn-logout-secondary">
+        <i class="fas fa-film me-1"></i> Back to home
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

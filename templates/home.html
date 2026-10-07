@@ -117,22 +117,22 @@
         <a href="{% url 'register' %}" class="alert-link">Register</a> to create a new account.
     </div>
     {% endif %}
-    <div>Recommended Movies</div>
+        <div class="section-title">Recommended Movies</div>
     <div class="row">
       {% for movie in movies|slice:"4" %}
       <div class="col-md-3 mb-4">
-        <a href="{% url 'theater_list' movie.id %}"class ="text-decoration-none">
-            <div class="card h-100">
-                <img src="{{ movie.image.url }}" class="card-img-top" alt="image"heght="300">
-                <div >
-                    <h5>{{movie.name}}</h5>
-                    <p>{{movie.description}}</p>
-                </div>
+        <a href="{% url 'theater_list' movie.id %}" class="text-decoration-none">
+          <div class="card h-100">
+            <img src="{{ movie.image.url }}" class="card-img-top" alt="{{ movie.name }}" style="height:300px; object-fit:cover;">
+            <div class="card-body">
+              <h5 class="card-title">{{ movie.name }}</h5>
+              <p class="card-text">{{ movie.description|truncatewords:18 }}</p>
             </div>
+          </div>
         </a>
       </div>
       {% endfor %}
-  </div>
+    </div>
   <div class="section-title">The Best of Live Events</div>
     <div class="row">
       <div class="col-md-2 col-sm-4">
