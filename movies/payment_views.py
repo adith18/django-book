@@ -155,21 +155,11 @@ def verify_payment(request, payment_id):
     else:
         pay_id = pay_id or f'pay_mock_{payment_txn.id}'
 
-    with transaction.atomic():
-        payment_txn = PaymentTransaction.objects.select_for_update().get(pk=payment_txn.pk)
-        if payment_txn.status == PaymentTransaction.Status.SUCCESS:
-            order = payment_txn.booking_order
-        else:
-            if PaymentTransaction.objects.filter(provider_payment_id=pay_id).exclude(pk=payment_txn.pk).exists():
-                return JsonResponse({'success': False, 'error': 'Duplicate payment reference.'}, status=400)
-            payment_txn.provider_payment_id = pay_id
-            payment_txn.status = PaymentTransaction.Status.SUCCESS
-            payment_txn.save(update_fields=['provider_payment_id', 'status', 'updated_at'])
-            try:
-                order = finalize_payment_transaction(payment_txn)
-            except BookingFinalizeError as exc:
-                release_payment_failure(payment_txn, str(exc))
-                return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+    try:
+        order = finalize_payment_transaction(payment_txn, provider_payment_id=pay_id)
+    except BookingFinalizeError as exc:
+        release_payment_failure(payment_txn, str(exc))
+        return JsonResponse({'success': False, 'error': str(exc)}, status=400)
 
     _queue_ticket_email(order.id)
 
@@ -232,19 +222,11 @@ def razorpay_webhook(request):
     if status != 'captured':
         return HttpResponse(status=200)
 
-    with transaction.atomic():
-        payment_txn = PaymentTransaction.objects.select_for_update().get(pk=payment_txn.pk)
-        if payment_txn.status == PaymentTransaction.Status.SUCCESS:
-            return HttpResponse(status=200)
-        if PaymentTransaction.objects.filter(provider_payment_id=pay_id).exists():
-            return HttpResponse(status=200)
-        payment_txn.provider_payment_id = pay_id
-        payment_txn.status = PaymentTransaction.Status.SUCCESS
-        payment_txn.save(update_fields=['provider_payment_id', 'status', 'updated_at'])
-        try:
-            order = finalize_payment_transaction(payment_txn)
-        except BookingFinalizeError:
-            return HttpResponse(status=200)
+    try:
+        order = finalize_payment_transaction(payment_txn, provider_payment_id=pay_id)
+    except BookingFinalizeError as exc:
+        release_payment_failure(payment_txn, str(exc))
+        return HttpResponse(status=200)
 
     _queue_ticket_email(order.id)
     return HttpResponse(status=200)

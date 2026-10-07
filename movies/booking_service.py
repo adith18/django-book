@@ -12,21 +12,30 @@ class BookingFinalizeError(ValueError):
 
 
 @transaction.atomic
-def finalize_payment_transaction(payment_txn: PaymentTransaction) -> BookingOrder:
+def finalize_payment_transaction(payment_txn: PaymentTransaction, provider_payment_id: str = None) -> BookingOrder:
     """
-    Create BookingOrder + Booking rows from a SUCCESS payment.
+    Verify eligibility, then create BookingOrder + Booking rows, marking the
+    payment SUCCESS in the SAME atomic scope as the booking creation.
     Idempotent: safe to call twice (webhook + client verify).
+
+    Deliberately does NOT accept a payment_txn already saved as SUCCESS by
+    the caller — the caller must pass the verified provider_payment_id and
+    let this function do the status flip, so that if booking creation fails
+    partway through, the whole savepoint (status change included) rolls
+    back together instead of leaving a "SUCCESS with no booking" ghost record.
     """
     payment_txn = PaymentTransaction.objects.select_for_update().get(pk=payment_txn.pk)
 
     if payment_txn.status == PaymentTransaction.Status.SUCCESS and payment_txn.booking_order_id:
         return payment_txn.booking_order
 
-    if payment_txn.status != PaymentTransaction.Status.SUCCESS:
-        raise BookingFinalizeError('Payment is not successful.')
+    if payment_txn.status not in (PaymentTransaction.Status.PENDING, PaymentTransaction.Status.SUCCESS):
+        raise BookingFinalizeError('Payment is not in a finalizable state.')
 
-    if payment_txn.booking_order_id:
-        return payment_txn.booking_order
+    if provider_payment_id and PaymentTransaction.objects.filter(
+        provider_payment_id=provider_payment_id
+    ).exclude(pk=payment_txn.pk).exists():
+        raise BookingFinalizeError('Duplicate payment reference.')
 
     show_time = payment_txn.show_time
     seat_ids = payment_txn.seat_ids or []
@@ -78,6 +87,14 @@ def finalize_payment_transaction(payment_txn: PaymentTransaction) -> BookingOrde
             raise BookingFinalizeError('Held seats do not match payment.')
         user_res.status = 'COMPLETED'
         user_res.save(update_fields=['status'])
+
+       # Flip to SUCCESS here, inside this same atomic scope — if anything
+    # above already raised, we never reach this line, so the payment stays
+    # at its prior status and release_payment_failure can act on it correctly.
+    if provider_payment_id:
+        payment_txn.provider_payment_id = provider_payment_id
+    payment_txn.status = PaymentTransaction.Status.SUCCESS
+    payment_txn.save(update_fields=['provider_payment_id', 'status', 'updated_at'])
 
     reference = payment_txn.provider_payment_id or f'BMS-{uuid.uuid4().hex[:12].upper()}'
     order = BookingOrder.objects.create(

@@ -666,8 +666,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }).then(r => r.json());
   }
 
-  function reportPaymentFailed(paymentId, reason) {
-    fetch(`/movies/payment/${paymentId}/failed/`, {
+    function reportPaymentFailed(paymentId, reason) {
+    return fetch(`/movies/payment/${paymentId}/failed/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
       body: JSON.stringify({ reason: reason || '' })
@@ -705,17 +705,32 @@ document.addEventListener('DOMContentLoaded', function () {
       const checkout = data.checkout;
       const paymentId = data.payment_transaction_id || checkout.payment_transaction_id;
 
-      if (checkout.mock) {
-        return completeVerifiedBooking(paymentId, {}).then(verifyData => {
-          if (verifyData.success) {
-            stopTimer();
-            showToast(verifyData.message || 'Booking confirmed!', 'success');
-            setTimeout(() => { window.location.href = verifyData.redirect_url || '/user/profile/'; }, 1200);
-          } else {
-            showToast(verifyData.error || 'Payment verification failed.', 'danger');
-            btnBook.disabled = false;
-            btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
-          }
+           if (checkout.mock) {
+        const simulateSuccess = window.confirm(
+          'MOCK PAYMENT (Razorpay not configured)\n\n' +
+          'OK = simulate a SUCCESSFUL payment\n' +
+          'Cancel = simulate a FAILED/declined payment'
+        );
+
+        if (simulateSuccess) {
+          return completeVerifiedBooking(paymentId, {}).then(verifyData => {
+            if (verifyData.success) {
+              stopTimer();
+              showToast(verifyData.message || 'Booking confirmed!', 'success');
+              setTimeout(() => { window.location.href = verifyData.redirect_url || '/user/profile/'; }, 1200);
+            } else {
+              showToast(verifyData.error || 'Payment verification failed.', 'danger');
+              btnBook.disabled = false;
+              btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
+            }
+          });
+        }
+
+        return reportPaymentFailed(paymentId, 'Simulated failure (mock mode)').then(() => {
+          showToast('Simulated payment failure. Seats released.', 'danger');
+          btnBook.disabled = false;
+          btnBook.innerHTML = '<i class="bi bi-credit-card-fill mr-1"></i> Confirm &amp; Pay';
+          fetchSeatStatus();
         });
       }
 
