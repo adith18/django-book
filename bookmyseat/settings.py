@@ -56,16 +56,27 @@ MIDDLEWARE = [
 ]
 
 AUTH_USER_MODEL='auth.User'
+# --- Email ---
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@bookmyseat.local')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'BookMySeat <noreply@bookmyseat.local>')
 
+# --- Razorpay (keep your three existing lines as they are) ---
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', '')
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', '')
 RAZORPAY_WEBHOOK_SECRET = os.environ.get('RAZORPAY_WEBHOOK_SECRET', '')
 
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'memory://')
-CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'cache+memory://')
-CELERY_TASK_ALWAYS_EAGER = os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'True').lower() in ('1', 'true', 'yes')
+# --- Celery: ticket emails are sent by a background worker ---
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_TASK_IGNORE_RESULT = True
+# Only for local testing without Redis: put CELERY_TASK_ALWAYS_EAGER=True in your .env file.
+# Never enable in production, because it makes the booking wait for the email.
+CELERY_TASK_ALWAYS_EAGER = os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'False').lower() in ('1', 'true', 'yes')
+CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_TASK_EAGER_PROPAGATES = True
 
 MEDIA_URL = '/media/'

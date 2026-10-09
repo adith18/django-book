@@ -232,13 +232,20 @@ def razorpay_webhook(request):
     return HttpResponse(status=200)
 
 
+import logging
+logger = logging.getLogger(__name__)
+
+
 def _queue_ticket_email(booking_order_id):
     from .tasks import send_ticket_email_task
 
-    try:
-        send_ticket_email_task.delay(booking_order_id)
-    except Exception:
-        send_ticket_email_task(booking_order_id)
+    def _enqueue():
+        try:
+            send_ticket_email_task.apply_async(args=[booking_order_id], retry=False)
+        except Exception:
+            logger.exception('Could not queue ticket email for order %s', booking_order_id)
+
+    transaction.on_commit(_enqueue)
 
 
 @login_required(login_url='login')

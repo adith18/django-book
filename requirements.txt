@@ -11,3 +11,7 @@ razorpay==1.4.2
 reportlab==4.2.5
 qrcode[pil]==8.0
 redis==5.2.1
+celery==5.4.0
+redis==5.0.8
+reportlab==4.2.2
+qrcode[pil]==7.4.2
