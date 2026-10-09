@@ -56,6 +56,7 @@ MIDDLEWARE = [
 ]
 
 AUTH_USER_MODEL='auth.User'
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 # --- Email ---
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
@@ -77,7 +78,7 @@ CELERY_TASK_IGNORE_RESULT = True
 # Never enable in production, because it makes the booking wait for the email.
 CELERY_TASK_ALWAYS_EAGER = os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'False').lower() in ('1', 'true', 'yes')
 CELERY_TASK_EAGER_PROPAGATES = False
-CELERY_TASK_EAGER_PROPAGATES = True
+
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

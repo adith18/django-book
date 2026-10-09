@@ -1,195 +1,268 @@
 {% extends "users/base.html" %} {% block content %}
 
-<div class="container py-5">
-  <div class="row">
-    <div class="col-lg-4 mb-4">
-      <!-- User Info Card -->
-      <div class="card shadow">
-        <div class="card-body text-center">
-          <div class="mb-3">
-            <i class="fas fa-user-circle fa-6x text-primary"></i>
-          </div>
-          <h3 class="card-title mb-0">{{ user.username }}</h3>
-          <p class="text-muted mb-3">{{ user.email }}</p>
-          <div class="d-flex justify-content-center">
-            <a href="#" class="btn btn-outline-primary me-2"><i class="fas fa-envelope me-2"></i>Message</a> 
-            <a href="{% url 'password_reset' %}" class="btn btn-outline-secondary"><i class="fas fa-key me-2"></i>Reset Password</a>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <div class="col-lg-8">
-      <!-- Profile Update Form Card -->
-      <div class="card shadow mb-4">
-        <div class="card-header bg-primary text-white">
-          <h4 class="mb-0"><i class="fas fa-user-edit me-2"></i> Update Profile</h4>
-        </div>
-        <div class="card-body">
-          <form method="POST">
-            {% csrf_token %}
-            {% for field in u_form %}
-              <div class="mb-3">
-                <label for="{{ field.id_for_label }}" class="form-label">
-                  <i class="fas fa-{% if field.name == 'username' %}user{% elif field.name == 'email' %}envelope{% else %}info-circle{% endif %} me-2"></i>
-                  {{ field.label }}
-                </label>
-                {{ field.errors }}
-                {{ field }}
-                {% if field.help_text %}
-                  <small class="form-text text-muted">{{ field.help_text }}</small>
-                {% endif %}
-              </div>
-            {% endfor %}
-            <button class="btn btn-primary w-100" type="submit"><i class="fas fa-save me-2"></i> Update Profile</button>
-          </form>
-        </div>
-      </div>
-      
-      <div class="card shadow mb-4">
-        <div class="card-header bg-dark text-white">
-          <h4 class="mb-0"><i class="fas fa-receipt me-2"></i> Payment History</h4>
-        </div>
-        <div class="card-body p-0">
-          {% if payments %}
-          <div class="table-responsive">
-            <table class="table table-sm mb-0">
-              <thead><tr><th>Date</th><th>Amount</th><th>Status</th><th>Transaction ID</th></tr></thead>
-              <tbody>
-                {% for p in payments %}
-                <tr>
-                  <td>{{ p.created_at|date:"M d, Y H:i" }}</td>
-                  <td>₹{{ p.amount }}</td>
-                  <td>{{ p.get_status_display }}</td>
-                  <td><small>{{ p.provider_payment_id|default:p.provider_order_id|default:"—" }}</small></td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          {% else %}
-          <p class="p-3 text-muted mb-0">No payments yet.</p>
-          {% endif %}
-        </div>
-      </div>
-
-      <!-- Bookings Card -->
-      <div class="card shadow">
-        <div class="card-header bg-success text-white">
-          <h4 class="mb-0"><i class="fas fa-ticket-alt me-2"> </i> Your Bookings</h4>
-        </div>
-        <div class="card-body">
-          {% if booking_orders %}
-          <h6 class="text-muted">Download tickets</h6>
-          <ul class="list-group mb-4">
-            {% for order in booking_orders %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <span>{{ order.show_time.movie.name }} · {{ order.reference }} · ₹{{ order.total_amount }}</span>
-              <a href="{% url 'download_ticket' order.id %}" class="btn btn-sm btn-outline-primary">PDF Ticket</a>
-            </li>
-            {% endfor %}
-          </ul>
-          {% endif %}
-          {% if bookings %}
-            <div class="row row-cols-1 row-cols-md-2 g-4">
-              {% for booking in bookings %}
-                <div class="col">
-                  <div class="card h-100 border-0 shadow-sm">
-                    <div class="card-body">
-                      <h5 class="card-title">{{ booking.movie.name }}</h5>
-                      <p class="card-text">
-                        <i class="fas fa-film me-2 text-muted"> </i>  {{ booking.theater.name }}<br>
-                        <i class="fas fa-chair me-2 text-muted"> </i>  Seat: {{ booking.seat.seat_number }}<br>
-                        <i class="far fa-clock me-2 text-muted"> </i>  {{ booking.booked_at|date:"F d, Y H:i" }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              {% endfor %}
-            </div>
-          {% else %}
-            <div class="text-center py-5">
-              <i class="fas fa-ticket-alt fa-4x text-muted mb-3"></i>
-              <p class="lead mb-0">No bookings yet. Time to plan your next movie night!</p>
-            </div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Font Awesome CDN -->
+<!-- Font Awesome (kept from your original template) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 
-<!-- Custom CSS -->
 <style>
-  body {
-    background-color: #f8f9fa;
+  body { background-color: #f4f6f9; }
+
+  .pf-wrap {
+    max-width: 1140px; margin: 0 auto; padding: 32px 16px 56px;
+    display: grid; grid-template-columns: 300px 1fr; gap: 24px; align-items: start;
   }
-  .card {
-    border-radius: 15px;
-    border: none;
-    transition: transform 0.3s ease-in-out;
+  .pf-side { position: sticky; top: 80px; }
+  .pf-main { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+
+  .pf-card {
+    background: #fff; border-radius: 16px; overflow: hidden;
+    box-shadow: 0 6px 24px rgba(26,26,46,.08);
   }
-  .card:hover {
-    transform: translateY(-5px);
+  .pf-card-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 16px 22px; font-weight: 800; font-size: 1.02rem; color: #fff;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
   }
-  .card-header {
-    border-top-left-radius: 15px;
-    border-top-right-radius: 15px;
+  .pf-card-head i { opacity: .85; }
+  .pf-card-body { padding: 22px; }
+
+  /* ── Profile card ── */
+  .pf-user-top {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    padding: 32px 20px 26px; text-align: center; color: #fff;
   }
-  /* Style form fields */
-  form input, form select, form textarea {
-    display: block;
-    width: 100%;
-    padding: 0.375rem 0.75rem;
-    font-size: 1rem;
-    font-weight: 400;
-    line-height: 1.5;
-    color: #212529;
-    background-color: #fff;
-    background-clip: padding-box;
-    border: 1px solid #ced4da;
-    border-radius: 0.25rem;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  .pf-avatar {
+    width: 84px; height: 84px; border-radius: 50%; margin: 0 auto 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.2rem; font-weight: 800; color: #1a1a2e;
+    background: linear-gradient(135deg, #20c997, #63e6be);
+    box-shadow: 0 0 0 5px rgba(255,255,255,.14);
   }
-  form input:focus, form select:focus, form textarea:focus {
-    border-color: #86b7fe;
-    outline: 0;
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  .pf-user-top h3 { margin: 0; font-size: 1.25rem; font-weight: 800; color: #fff; }
+  .pf-user-top p { margin: 4px 0 0; font-size: .88rem; color: rgba(255,255,255,.7); word-break: break-all; }
+  .pf-stats { display: flex; border-bottom: 1px solid #eef0f3; }
+  .pf-stat { flex: 1; text-align: center; padding: 14px 8px; }
+  .pf-stat + .pf-stat { border-left: 1px solid #eef0f3; }
+  .pf-stat b { display: block; font-size: 1.3rem; color: #1a1a2e; }
+  .pf-stat span { font-size: .72rem; letter-spacing: .5px; text-transform: uppercase; color: #8a8f98; }
+  .pf-user-actions { padding: 18px; }
+
+  .pf-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 11px 14px; border-radius: 10px; font-weight: 700;
+    font-size: .92rem; text-decoration: none !important; cursor: pointer;
+    border: 2px solid #e3e6ea; background: #fff; color: #1a1a2e !important;
+    transition: border-color .15s, opacity .15s;
   }
-  @media (max-width: 767.98px) {
-    .card-body {
-      padding: 1rem;
-    }
+  .pf-btn:hover { border-color: #1a1a2e; }
+  .pf-btn-primary {
+    border: none; color: #fff !important;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+  }
+  .pf-btn-primary:hover { opacity: .9; }
+  .pf-btn-sm { width: auto; padding: 7px 14px; font-size: .82rem; border-radius: 8px; }
+
+  /* ── Form ── */
+  .pf-form .pf-field { margin-bottom: 16px; }
+  .pf-form label {
+    display: block; margin-bottom: 6px; font-size: .74rem; font-weight: 700;
+    letter-spacing: .5px; text-transform: uppercase; color: #555;
+  }
+  .pf-form label i { margin-right: 6px; color: #1a1a2e; }
+  .pf-form input, .pf-form select, .pf-form textarea {
+    display: block; width: 100%; padding: 11px 13px; font-size: .95rem;
+    color: #212529; background: #fff; border: 1px solid #d5dae0; border-radius: 10px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .pf-form input:focus, .pf-form select:focus, .pf-form textarea:focus {
+    outline: 0; border-color: #1a1a2e; box-shadow: 0 0 0 3px rgba(26,26,46,.1);
+  }
+  .pf-form .form-text, .pf-form small { display: block; margin-top: 5px; font-size: .78rem; color: #8a8f98; }
+  .pf-form .errorlist { list-style: none; padding: 0; margin: 0 0 6px; color: #dc3545; font-size: .82rem; }
+
+  /* ── Tickets (booking orders) ── */
+  .pf-order {
+    display: flex; gap: 18px; justify-content: space-between; align-items: stretch;
+    padding: 18px 0; border-bottom: 1px dashed #dfe3e8;
+  }
+  .pf-order:first-child { padding-top: 0; }
+  .pf-order:last-child { border-bottom: none; padding-bottom: 0; }
+  .pf-order-title { font-size: 1.08rem; font-weight: 800; color: #1a1a2e; margin-bottom: 6px; }
+  .pf-order-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .86rem; color: #555; }
+  .pf-order-meta i { margin-right: 6px; color: #8a8f98; }
+  .pf-seats { margin: 10px 0 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .pf-seat {
+    padding: 3px 10px; border-radius: 6px; font-size: .78rem; font-weight: 700;
+    background: #eef9f5; color: #0f8f6a; border: 1px solid #c4ece0;
+  }
+  .pf-ref { font-size: .76rem; color: #9aa0a8; word-break: break-all; }
+  .pf-order-side {
+    display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between;
+    gap: 10px; flex-shrink: 0; text-align: right;
+  }
+  .pf-amount { font-size: 1.2rem; font-weight: 800; color: #1a1a2e; }
+
+  /* ── Badges ── */
+  .pf-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 20px;
+    font-size: .7rem; font-weight: 800; letter-spacing: .3px; background: #e9ecef; color: #555;
+  }
+  .pf-badge-ok { background: #d1e7dd; color: #0a3622; }
+  .pf-badge-bad { background: #f8d7da; color: #58151c; }
+  .pf-badge-wait { background: #fff3cd; color: #664d03; }
+  .pf-badge-info { background: #cff4fc; color: #055160; }
+
+  /* ── Payment table ── */
+  .pf-table-wrap { overflow-x: auto; }
+  .pf-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  .pf-table th {
+    text-align: left; padding: 12px 22px; font-size: .72rem; letter-spacing: .5px;
+    text-transform: uppercase; color: #8a8f98; background: #f8f9fb; white-space: nowrap;
+  }
+  .pf-table td { padding: 13px 22px; border-top: 1px solid #eef0f3; color: #333; white-space: nowrap; }
+  .pf-table td small { color: #8a8f98; }
+
+  /* ── Empty states / seat-booking details ── */
+  .pf-empty { text-align: center; padding: 34px 16px; color: #8a8f98; }
+  .pf-empty i { font-size: 2.6rem; margin-bottom: 12px; display: block; color: #cfd4da; }
+  .pf-empty p { margin: 0; }
+  .pf-details { margin-top: 20px; border-top: 1px solid #eef0f3; padding-top: 14px; }
+  .pf-details summary { cursor: pointer; font-weight: 700; font-size: .88rem; color: #1a1a2e; }
+  .pf-seatbook {
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 10px 0; border-bottom: 1px solid #f0f2f5; font-size: .85rem; color: #555;
+  }
+  .pf-seatbook b { color: #1a1a2e; }
+
+  @media (max-width: 900px) {
+    .pf-wrap { grid-template-columns: 1fr; }
+    .pf-side { position: static; }
+  }
+  @media (max-width: 560px) {
+    .pf-order { flex-direction: column; }
+    .pf-order-side { flex-direction: row; align-items: center; justify-content: space-between; text-align: left; }
   }
 </style>
-<!-- <div class="container mt-4">
-    <h2>Profile</h2>
-    <form method="POST">
-      {% csrf_token %}
-      {{ u_form.as_p }}
-      <div>
-        <button class="btn btn-primary mt-2" type="submit">Update Profile</button>
+
+<div class="pf-wrap">
+
+  <!-- ══════════ Left: profile summary ══════════ -->
+  <aside class="pf-side">
+    <div class="pf-card">
+      <div class="pf-user-top">
+        <div class="pf-avatar">{{ user.username|slice:":1"|upper }}</div>
+        <h3>{{ user.username }}</h3>
+        <p>{{ user.email }}</p>
       </div>
-    </form>
-   
-    <p>Want to change your password? <a href="{% url 'password_reset' %}">Reset it here</a>.</p>
+      <div class="pf-stats">
+        <div class="pf-stat"><b>{{ booking_orders|length }}</b><span>Recent orders</span></div>
+        <div class="pf-stat"><b>{{ payments|length }}</b><span>Payments</span></div>
+      </div>
+      <div class="pf-user-actions">
+        <a href="{% url 'password_reset' %}" class="pf-btn"><i class="fas fa-key"></i> Reset Password</a>
+      </div>
+    </div>
+  </aside>
 
-    <h2>Booking</h2>
-    <ul>
-      {% for booking in bookings %}
-      <li>
-        movie:{{booking.movie.name}}<br>
-        theater:{{booking.theater.name}}<br>
-        seat:{{booking.seat.seat_number}}<br>
-        bookedat:{{booking.booked_at}}
+  <!-- ══════════ Right: content ══════════ -->
+  <div class="pf-main">
 
-      </li>
-      {% empty %}
-      <li>no bookings yet</li>
-      {% endfor %}
-    </ul>
-  </div> -->
+    <!-- Update profile -->
+    <div class="pf-card">
+      <div class="pf-card-head"><i class="fas fa-user-edit"></i> Update Profile</div>
+      <div class="pf-card-body">
+        <form method="POST" class="pf-form">
+          {% csrf_token %}
+          {% for field in u_form %}
+            <div class="pf-field">
+              <label for="{{ field.id_for_label }}">
+                <i class="fas fa-{% if field.name == 'username' %}user{% elif field.name == 'email' %}envelope{% else %}info-circle{% endif %}"></i>{{ field.label }}
+              </label>
+              {{ field.errors }}
+              {{ field }}
+              {% if field.help_text %}
+                <small class="form-text text-muted">{{ field.help_text }}</small>
+              {% endif %}
+            </div>
+          {% endfor %}
+          <button class="pf-btn pf-btn-primary" type="submit"><i class="fas fa-save"></i> Update Profile</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Your tickets -->
+    <div class="pf-card">
+      <div class="pf-card-head"><i class="fas fa-ticket-alt"></i> Your Bookings</div>
+      <div class="pf-card-body">
+        {% if booking_orders %}
+          {% for order in booking_orders %}
+          <div class="pf-order">
+            <div>
+              <div class="pf-order-title">{{ order.show_time.movie.name }}</div>
+              <div class="pf-order-meta">
+                <span><i class="fas fa-map-marker-alt"></i>{{ order.show_time.theater.name }} · {{ order.show_time.screen.name }}</span>
+                <span><i class="far fa-calendar"></i>{{ order.show_time.date|date:"D, M d Y" }} · {{ order.show_time.start_time|time:"g:i A" }}</span>
+              </div>
+              <div class="pf-seats">
+                {% for b in order.bookings.all %}{% if b.seat %}<span class="pf-seat">{{ b.seat.seat_number }}</span>{% endif %}{% endfor %}
+              </div>
+              <div class="pf-ref">Ref: {{ order.reference }}</div>
+            </div>
+            <div class="pf-order-side">
+              <div>
+                <div class="pf-amount">₹{{ order.total_amount }}</div>
+                <span class="pf-badge {% if order.status == 'CONFIRMED' %}pf-badge-ok{% elif order.status == 'CANCELLED' %}pf-badge-bad{% endif %}">{{ order.get_status_display }}</span>
+              </div>
+              <a href="{% url 'download_ticket' order.id %}" class="pf-btn pf-btn-primary pf-btn-sm"><i class="fas fa-download"></i> PDF Ticket</a>
+            </div>
+          </div>
+          {% endfor %}
+        {% endif %}
+
+        {% if bookings %}
+          <details class="pf-details">
+            <summary>Individual seat bookings ({{ bookings|length }})</summary>
+            {% for booking in bookings %}
+              <div class="pf-seatbook">
+                <span><b>{{ booking.movie.name }}</b> · {{ booking.theater.name }}</span>
+                <span>Seat {{ booking.seat.seat_number }} · {{ booking.booked_at|date:"F d, Y H:i" }}</span>
+              </div>
+            {% endfor %}
+          </details>
+        {% endif %}
+
+        {% if not booking_orders and not bookings %}
+          <div class="pf-empty">
+            <i class="fas fa-ticket-alt"></i>
+            <p>No bookings yet. Time to plan your next movie night!</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Payment history -->
+    <div class="pf-card">
+      <div class="pf-card-head"><i class="fas fa-receipt"></i> Payment History</div>
+      {% if payments %}
+      <div class="pf-table-wrap">
+        <table class="pf-table">
+          <thead><tr><th>Date</th><th>Amount</th><th>Status</th><th>Transaction ID</th></tr></thead>
+          <tbody>
+            {% for p in payments %}
+            <tr>
+              <td>{{ p.created_at|date:"M d, Y H:i" }}</td>
+              <td>₹{{ p.amount }}</td>
+              <td><span class="pf-badge {% if p.status == 'SUCCESS' %}pf-badge-ok{% elif p.status == 'FAILED' or p.status == 'CANCELLED' %}pf-badge-bad{% elif p.status == 'PENDING' %}pf-badge-wait{% elif p.status == 'REFUNDED' %}pf-badge-info{% endif %}">{{ p.get_status_display }}</span></td>
+              <td><small>{{ p.provider_payment_id|default:p.provider_order_id|default:"—" }}</small></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="pf-empty"><i class="fas fa-receipt"></i><p>No payments yet.</p></div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
 {% endblock %}
